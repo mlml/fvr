@@ -1,0 +1,11 @@
+# compiled #
+*.pyc
+*.pyo
+
+# OS generated files #
+.DS_Store
+.DS_Store?
+
+# Files on Misha's computer #
+iconMaker.py
+FVR_old.py
