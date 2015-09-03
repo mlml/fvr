@@ -459,8 +459,8 @@ class FilterPanel(wx.Panel):
 		self.Show(True)
 		## bind events to class functions
 		self.button.Bind(wx.EVT_BUTTON, self.OnPress)
-		self.wordBox.Bind(wx.EVT_TEXT, self.OnType)
 		self.wordBox.Bind(wx.EVT_TEXT_ENTER, self.OnEnter)
+		self.wordBox.Bind(wx.EVT_COMBOBOX, self.OnWordSelect)
 		self.minDurBox.Bind(wx.EVT_KILL_FOCUS, self.OnMin)
 		self.maxDurBox.Bind(wx.EVT_KILL_FOCUS, self.OnMax)
 		self.minDurBox.Bind(wx.EVT_TEXT_ENTER, self.OnMin)
@@ -494,17 +494,18 @@ class FilterPanel(wx.Panel):
 			self.button.SetBitmapLabel(self.filterBit)
 		self.Layout()
 
-	def OnType(self, e):
-		## show list of words when typing in the box
-		self.wordBox.Popup()
 
 	def OnEnter(self, e):
 		## returns word value to default if the typed word isn't found in the plot
-		if self.wordBox.GetValue() not in self.words:
+		if self.wordBox.GetValue().upper() not in self.words:
 			self.wordBox.SetValue('')
 		else:
 			self.OnPress(enter = True)
+
+	def OnWordSelect(self, e):
+		## calls OnPress if a word in the popup list is selected
 		self.wordBox.Dismiss() 
+		self.OnPress(enter = True)
 
 	def OnMin(self, e):
 		## only integers allowed in minBox, also processes return key 
@@ -552,7 +553,7 @@ class FilterPanel(wx.Panel):
 
 	def FindWords(self):
 		## get list of all words from vowels on the plot
-		return sorted(list(self.GetTopLevelParent().plotPanel.words))
+		return ['']+sorted(list(self.GetTopLevelParent().plotPanel.words))
 
 
 
@@ -798,18 +799,19 @@ class PlotPanel(wx.Panel):
 
 
 	def OnRightClick(self, e):
-		pos = e.GetPosition()
-		self.vowelInfoPanel.SetPosition(self.ClientToScreen(pos))
-		vowel = self.GetVowelsInClickRange(pos)[0]
-		if vowel: self.vowelInfoPanel.UpdateMessage(str(vowel))
-
+		try:
+			pos = e.GetPosition()
+			self.vowelInfoPanel.SetPosition(self.ClientToScreen(pos))
+			vowel = self.GetVowelsInClickRange(pos)[0]
+			if vowel: self.vowelInfoPanel.UpdateMessage(str(vowel))
+		except:
+			pass  ## TODO: don't pass when excepting, write to sys.stderr instead (for all passes) 
 	def NormalClick(self, pos):
 		## processes a normal click on the plot (not a click and drag)
 		clicked = self.GetVowelsInClickRange(pos)[0]
 		## if remeasuring and clicked is not a remeasure option
 		## Note: this would throw an error later anyway (if the if statement wasn't there) which would be handled in OnLeftClick but it's clearer if I prevent it here
 		if self.remeasureOptions and clicked not in self.remeasureOptions:
-			print 'here'
 			return
 		## play if play mode is on 
 		if self.GetTopLevelParent().toolBarPanel.playButton.GetPlayState(): 
@@ -823,8 +825,8 @@ class PlotPanel(wx.Panel):
 		## gets all vowels within 5 pixels of the point (p) in any direction
 		## used to figure out which vowel is clicked on the plot
 		xyGrid = {(x,y) for x in range(p[0]-5,p[0]+6) for y in range(p[1]-5,p[1]+6)}
-		vowels = [ v for i in xyGrid&self.positionKeys for v in self.positions[i]]
-		return [v for v in vowels if v in self.visibleVowels]
+		vowels = [ v for i in xyGrid&self.positionKeys for v in self.positions[i] ]
+		return [v for v in vowels if v in self.visibleVowels and (not self.filteredWord or v.word.upper() == self.filteredWord) and (not self.filteredDurs or self.filteredDurs[0] <= v.duration*1000 <= self.filteredDurs[1])]
 
 	def SetRemeasurePermissions(self, value):
 		## sets permission to remeasure vowels on the plot
@@ -1422,8 +1424,6 @@ class PhonPanel(wx.Panel):
 				self.otherGridSizer.Add(button, (i,j))
 				mainOtherButton.AddMinion(button)
 				self.parent.plotPanel.others[c] = set()
-		print self.parent.plotPanel.others
-
 		self.SetSizer(sizer)
 
 	def RedrawOtherVowels(self):
@@ -1448,7 +1448,6 @@ class PhonPanel(wx.Panel):
 			except:
 				pass
 		self.parent.plotPanel.others = otherDict
-		print self.parent.plotPanel.others
 		self.parent.plotPanel.Refresh()
 		self.Fit()
 		self.parent.Fit()
