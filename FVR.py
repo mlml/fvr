@@ -263,7 +263,6 @@ class VowelButton():
 				self.parent.GetTopLevelParent().toolBarPanel.cancelButton.button.Enable() 
 				remeasureMode = self.parent.GetTopLevelParent().toolBarPanel.reMeasureButton.GetMode()
 				# create remeasurements or open praat and wait
-				# TODO: create a dialog with a button that calls log in praat
 				self.SetBitmap(self.parent.GetPreloadedBitmap('org'))
 				if remeasureMode == 'F':
 					self.alternates = self.MakeAlternate(self.maxFormantAlternateValues, 'm')
@@ -429,8 +428,6 @@ class FilterPanel(wx.Panel):
 		self.button = wx.BitmapButton(self, bitmap = self.filterBit, size = (55,55))
 		titleText = wx.StaticText(self, label = "FILTER", style = wx.ALIGN_CENTER)
 		## define list of words in the plot
-		## TODO: allow to select multiple words at once
-		## TODO: make buttons to filter by stress (0,1,2) 
 		self.words = []
 		wordText = wx.StaticText(self, label = "By word...", style = wx.ALIGN_LEFT)
 		self.wordBox = wx.ComboBox(self, value = ' ',  choices = self.words, style = wx.CB_DROPDOWN|wx.TE_PROCESS_ENTER)
@@ -480,7 +477,6 @@ class FilterPanel(wx.Panel):
 
 	def OnPress(self, e = None, enter = False):
 		## call plotpanel.filterVowels() when button or return key is pressed 
-		## TODO: update positions dict and visiblevowels when filtering
 		plotpanel = self.GetTopLevelParent().plotPanel
 		if self.button.GetBitmapLabel() == self.filterBit or enter:
 			## filter the vowels on the plot
@@ -747,7 +743,6 @@ class PlotPanel(wx.Panel):
 		## create vowel bitmaps from files to be used for vowel points on the plot
 		self.BuildVowelBitmaps()
 		## draw labels
-		## TODO: draw grid as well
 		width, height = self.GetAdjustedSize()
 		self.f1Label = wx.StaticText(self, label = 'F1', pos = (width/2 , 0) )
 		self.f1Label.SetForegroundColour('GREY')
@@ -828,7 +823,7 @@ class PlotPanel(wx.Panel):
 		## gets all vowels within 5 pixels of the point (p) in any direction
 		## used to figure out which vowel is clicked on the plot
 		xyGrid = {(x,y) for x in range(p[0]-5,p[0]+6) for y in range(p[1]-5,p[1]+6)}
-		vowels = [ v for i in xyGrid&self.positionKeys for v in self.positions[i]] ## TODO: create temporary zoom box when vowels are overlapping instead of returning the first one only
+		vowels = [ v for i in xyGrid&self.positionKeys for v in self.positions[i]]
 		return [v for v in vowels if v in self.visibleVowels]
 
 	def SetRemeasurePermissions(self, value):
@@ -1122,7 +1117,6 @@ class PlotPanel(wx.Panel):
 
 	def OnResize(self, e):
 		## handler when resizing the frame
-		## TODO: call after a certain time so only resize after stretched to full size 
 		# self.plotBM = wx.EmptyBitmap(*self.GetSize())
 		# self.dc = wx.MemoryDC(self.plotBM)
 		self.PlaceVowels()
@@ -1141,7 +1135,6 @@ class PlotPanel(wx.Panel):
 		self.Refresh()
 
 		## hides stdDev ellipse when remeasuring
-		## TODO: redraw ellipse to new plot instead of hiding it 
 		self.clearOverlay()
 		sdButton = self.GetTopLevelParent().toolBarPanel.stdDevButtons
 		if sdButton.IsOn():
@@ -1183,13 +1176,12 @@ class PlotPanel(wx.Panel):
 								i = i.strip().split(delimiter) ## split the row into a list
 								## make a new button instance according to stuff in the row 
 								## (note some settings are optional)
-								## TODO: make settings which are truly optional and make sure they can be excluded if necessary
 								f1 = int(float(i[headingCol['F1']]))
 								f2 = int(float(i[headingCol['F2']]))
 								word = i[headingCol['WORD']]
 								cmu = i[headingCol['CMU']][:2]
 								other = self.OptionalArgHandler(i,headingCol['OTHER']) if 'OTHER' in headingCol else None
-								start, stop = float(i[headingCol['START']]) , float(i[headingCol['END']]) ## TODO: should I cast this to an int here?  Check to see if durations get binned properly
+								start, stop = float(i[headingCol['START']]) , float(i[headingCol['END']]) 
 								# make button instance
 								button = VowelButton(	parent = self,
 														lineInFile = n,
@@ -1356,8 +1348,6 @@ class PlotPanel(wx.Panel):
 
 	def ShowPraatMeasurements(self, e):
 		## when the frame comes back into focus after remeasuring in praat, show the remeasured vowel
-		## TODO: create a log button that pops up when remeasuring in praat and update the panel
-		## 			whenever that is clicked instead so the vowels appear even when the frame isn't in focus
 		button = self.vowelInFocus
 		if not self.GetRemeasurePermissions() and isfile('praatLog'):
 			button.alternates = button.MakeAlternate(button.ReadPraatAlternates(), 'p')  
@@ -1598,7 +1588,6 @@ class ZoomButton(wx.Panel):
 
 class ReMeasureButton(wx.Panel):
 	## panel containing radio buttons to select remeasurement style
-	## TODO: only display radiobuttons if that remeasurement option is available
 	def __init__(self, parent):
 		wx.Panel.__init__(self, parent = parent)
 		## define sizer and controls
@@ -1827,8 +1816,6 @@ class UndoRedoButtons(wx.Panel):
 
 	def Redo(self, e):
 		## redoes last undid remeasurement
-		## TODO: change so that if something has been done since last redo 
-		## 			then this is disabled
 		command = self.topParent.future.pop()
 		self.ExecuteCommand(*command)
 		self.topParent.past.append((command[0], command[2], command[1]))
@@ -2376,7 +2363,7 @@ class ConfigInputDialog(wx.Dialog):
 
 	def SetDefault(self, newDefault):
 		## sets the current setting as the default setting (to be used on start up)
-		## called automatically when saving a new setting configuration (TODO: do I want to do this??)
+		## called automatically when saving a new setting configuration 
 		## must be named SetDefault in order to work with singlechoicedialogimproved()
 		self.default = newDefault
 		lines = []
@@ -2595,9 +2582,9 @@ class mainFrame(wx.Frame):
 
 		self.SetSizer(self.mainSizer)
 		## default Location of praat 
-		self.Praat = '/Applications/Praat.app' ## TODO: make this settable
+		self.Praat = '/Applications/Praat.app'
 
-		## setup menu bar TODO: add more menu items
+		## setup menu bar
 		menubar = wx.MenuBar()
 		fileMenu = wx.Menu()
 		editMenu = wx.Menu()
@@ -2709,7 +2696,7 @@ class mainFrame(wx.Frame):
 
 	def OnFAVE(self, e):
 		## allows user to convert the *formant.txt files (output from FAVE-extract)
-		## so that they are readable by FVR (TODO: do I want a setting that reads a .plt/.pll file directly??)
+		## so that they are readable by FVR
 		messageD = wx.MessageDialog(self, 'This will rewrite formant.txt output files from the FAVE-extract program\n(http://fave.ling.upenn.edu/index.html)\nso they can be processed using FVR\nContinue?')
 		openD = wx.DirDialog(self, 'Select the folder containing the FAVE formant.txt files')
 		saveD = wx.DirDialog(self, 'Select the folder to write the formatted formant.txt files')
@@ -2755,7 +2742,6 @@ class mainFrame(wx.Frame):
 
 	def OnFindPraat(self, e):
 		## lets user change the path to Praat
-		## TODO: save this setting externally and load this one as default on startup
 		praatDialog = wx.FileDialog(self, message = 'Find location of Praat', style = wx.FD_OPEN, wildcard = ".app")
 		if praatDialog.ShowModal() == wx.ID_OK:
 			self.Praat = praatDialog.GetPath()
@@ -2778,7 +2764,6 @@ class mainFrame(wx.Frame):
 
 	def OnOpen(self, e):
 		## open wav and .csv/.txt files to read vowels from
-		## TODO: give option to only open info file (this would disable play button and remeasurement using praat)
 		wavDialog = wx.FileDialog(self, message = 'Select .wav files or directory', style = wx.FD_OPEN|wx.FD_MULTIPLE,
 									wildcard = "WAV files (*.wav)|*.wav")
 		if wavDialog.ShowModal() == wx.ID_OK:
@@ -2787,7 +2772,7 @@ class mainFrame(wx.Frame):
 			if infoDialog.ShowModal() == wx.ID_OK:
 				wavFiles = wavDialog.GetPaths()
 				infoFiles = infoDialog.GetPaths()
-				self.saveDir = dirname(infoFiles[0]) ## TODO: don't set this here, set it from file (see above) 
+				self.saveDir = dirname(infoFiles[0])
 				self.infoDir = dirname(infoFiles[0])
 				newFiles = [(w,i) for w,i in self.GetFiles(wavFiles, infoFiles) if (w,i) not in self.openFiles]
 				self.openFiles = newFiles+self.openFiles

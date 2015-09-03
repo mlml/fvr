@@ -59,9 +59,9 @@ If FVR isn't opening your files...
 * check your corresponding wav files and txt/csv files are named properly (see above)
 * check the info reader is configured for your txt/csv files `File > Configure Info Reader` This will open up a window where you can describe your txt/csv files (hover over each input box for hints on what values they take)
 * **IF YOUR FILE IS A FORMANT.TXT FILE FROM FAVE-EXTRACT:**
-    *FVR cannot read these files directly but can convert them easily
-    *Go to `File > Configure FAVE output`
-    *Follow the prompts
+    * FVR cannot read these files directly but can convert them easily
+    * Go to `File > Configure FAVE output`
+    * Follow the prompts
 
 ####Recommended FAVE-extract settings:
 
@@ -149,7 +149,7 @@ The toolbar buttons are located at the top of the main FVR window:
 
 **REDO**
 	
-This will redo the last undid action
+* This will redo the last undid action
 
 **REMOVE FROM PLOT**
 	
@@ -169,7 +169,7 @@ This will redo the last undid action
 * This will open a window which will allow you to either define your own phonetic alphabet (by entering the vowel labels in the grid) or load a preset one.
 
 * To load a preset alphabet click *Open*.  
-    *Current Presets are CELEX and IPA
+    * Current Presets are CELEX and IPA
 
 ##License
 
