@@ -20,7 +20,7 @@ Thanks to Morgan Sonderegger and everyone at [MLML](http://mlmlab.org/)
 Code for `zoomIn.Praat` was adapted from `PlotnikButton.praat` by Ingrid Rosenfelder
 (available with the [Plotnik 10.3](http://www.ling.upenn.edu/~wlabov/Plotnik.html) release)
 
-The [sendpraat](http://www.fon.hum.uva.nl/praat/sendpraat.html) binaries are from Paul Boersma (http://www.fon.hum.uva.nl/praat/sendpraat.html)
+The [sendpraat](http://www.fon.hum.uva.nl/praat/sendpraat.html) binaries are from Paul Boersma
 
 The first version of this software was (somewhat narcissistically) called [Plotmish](http://github.com/mlml/plotmish) (though this one is much better).
 
