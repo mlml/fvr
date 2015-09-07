@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-import wx, re, subprocess, os, sys, wave, glob
+import wx, re, subprocess, os, sys, wave, glob, time
 from os.path import isdir, isfile, join, basename, dirname
 import numpy as np
 
@@ -233,8 +233,8 @@ class VowelButton():
 		## to be displayed properly all vowels must have a position (alternate values receive position here after they are created)
 		if self.original or f1Max >= self.f1 >= f1Min and f2Max >= self.f2 >= f2Min:
 			plotWidth, plotHeight = self.parent.GetAdjustedSize()
-			x = plotWidth - int(plotWidth * (float(self.f2-f2Min)/(f2Max-f2Min)))
-			y = int(plotHeight * (float(self.f1-f1Min)/(f1Max-f1Min)))
+			x = plotWidth - int(plotWidth * (float(self.f2-f2Min)/(f2Max-f2Min))) + 10
+			y = int(plotHeight * (float(self.f1-f1Min)/(f1Max-f1Min))) + 10
 			## set position
 			self.position = (x,y)
 			## add position to positions dict and positionKeys set
@@ -255,9 +255,8 @@ class VowelButton():
 
 	def OnRemeasure(self):
 		## when clicking a vowel point (when not removing vowels)
-		if self.parent.remeasureOptions: # if selecting a remeasurement for a vowel
-			if self in self.parent.remeasureOptions: 
-				self.TheChosenOne()
+		if self.parent.remeasureOptions: # if selecting a remeasurement for a vowel 
+			self.TheChosenOne()
 		else: # if selecting a vowel to remeasure
 			if self.parent.GetRemeasurePermissions():
 				self.parent.GetTopLevelParent().toolBarPanel.cancelButton.button.Enable() 
@@ -275,14 +274,21 @@ class VowelButton():
 					return None
 				self.parent.remeasureOptions.append(self)
 				# change bitmaps of all relevant vowels
+				self.parent.CalculateFormantMaxMins()
+				rePlaceCheck = False
 				for a in self.alternates:
 					a.SetBitmap(self.parent.GetPreloadedBitmap('alt'))
 					self.parent.remeasureOptions.append(a)
+					## check if the plot needs to be remeasured
+					if a.f1 in self.parent.maxmins[:2] or a.f2 in self.parent.maxmins[2:]:
+						rePlaceCheck = True
 				self.parent.SetRemeasurePermissions(False)
 				self.parent.vowelInFocus = self				
-		## update the plotpanel
-		self.parent.CalculateFormantMaxMins()
-		self.parent.PlaceVowels()
+				## update the plotpanel
+				if rePlaceCheck:
+					self.parent.PlaceVowels()
+				else:
+					self.parent.PlaceVowels(altsOnly = True)
 
 
 	def ReadPraatAlternates(self):
@@ -332,10 +338,14 @@ class VowelButton():
 			# remove original value so the vowel is not treated like an alternate
 			self.original = None
 		# hide remeasure options
+		rePlaceCheck = False
 		for rb in self.parent.remeasureOptions:
 			if rb is not self: 
 				self.parent.RemoveStoredVowelValues(rb, rb.f1, rb.f2, rb.word, rb.duration, rb.cmuType, rb.otherType, rb.position)
 				rb.Hide()
+				## check if the plot needs to be remeasured
+				if rb.f1 in self.parent.maxmins[:2] or rb.f2 in self.parent.maxmins[2:]:
+					rePlaceCheck = True
 			else:
 				rb.Show()
 		## reset to normal mode
@@ -343,6 +353,11 @@ class VowelButton():
 		self.parent.vowelInFocus = None
 		self.parent.SetRemeasurePermissions(True)
 		self.parent.GetTopLevelParent().toolBarPanel.cancelButton.button.Disable()
+		self.parent.CalculateFormantMaxMins()
+		if rePlaceCheck:
+			self.parent.PlaceVowels()
+		else:
+			self.parent.Refresh()
 
 	def GetFormants(self):
 		## returns formant values for the vowel
@@ -356,7 +371,10 @@ class VowelButton():
 		self.parent.RemoveStoredVowelValues(self, self.f1, self.f2, self.word, self.duration, self.cmuType, self.otherType, self.position)
 		if click:  # if called by clicking the vowel point
 			self.parent.CalculateFormantMaxMins()
-			self.parent.PlaceVowels() ## switch with remove single vowel (redraws plot around vowel point only)
+			if self.f1 in self.parent.maxmins[:2] or self.f2 in self.parent.maxmins[2:]:
+				self.parent.PlaceVowels() 
+			else:
+				self.parent.Refresh()
 			self.parent.GetTopLevelParent().past.append(('remove', [self], None))
 			self.parent.GetTopLevelParent().future = [] ## makes sure you can't redo something you've already modified
 			self.parent.GetTopLevelParent().toolBarPanel.undoRedoButtons.CheckState()
@@ -768,6 +786,10 @@ class PlotPanel(wx.Panel):
 
 		# init vowel info panel
 		self.vowelInfoPanel = VowelInfo(self)
+	
+	def OnResize(self, e):
+		## handler when resizing the frame
+		self.PlaceVowels()
 
 	def OnPaint(self, e):
 		dc = wx.PaintDC(self)
@@ -783,19 +805,19 @@ class PlotPanel(wx.Panel):
 	def OnLeftClick(self, e):
 		pos = e.GetPosition()
 		## if removing vowels from the plot
-		try:
-			if self.removing: ## give removing priority over zooming if both are on
-				if self.drawing: 
-					self.RemoveInBox(pos)
-				else:
-					self.GetVowelsInClickRange(pos).RemoveVowel(True) 
-			elif self.zooming:
-				self.DoTheZoom(pos) ## Note that if this fails (ie. actual click instead of end of drawing a box) self.NormalClick will be called
-			## if playing or remeasuring vowels
+		# try:
+		if self.removing: ## give removing priority over zooming if both are on
+			if self.drawing: 
+				self.RemoveInBox(pos)
 			else:
-				self.NormalClick(pos)
-		except:
-			return
+				self.GetVowelsInClickRange(pos)[0].RemoveVowel(True) 
+		elif self.zooming:
+			self.DoTheZoom(pos) ## Note that if this fails (ie. actual click instead of end of drawing a box) self.NormalClick will be called
+		## if playing or remeasuring vowels
+		else:
+			self.NormalClick(pos)
+		# except:
+		# 	return
 
 
 	def OnRightClick(self, e):
@@ -806,13 +828,14 @@ class PlotPanel(wx.Panel):
 			if vowel: self.vowelInfoPanel.UpdateMessage(str(vowel))
 		except:
 			pass  ## TODO: don't pass when excepting, write to sys.stderr instead (for all passes) 
+	
 	def NormalClick(self, pos):
 		## processes a normal click on the plot (not a click and drag)
 		clicked = self.GetVowelsInClickRange(pos)[0]
-		## if remeasuring and clicked is not a remeasure option
-		## Note: this would throw an error later anyway (if the if statement wasn't there) which would be handled in OnLeftClick but it's clearer if I prevent it here
-		if self.remeasureOptions and clicked not in self.remeasureOptions:
-			return
+		# ## if remeasuring and clicked is not a remeasure option
+		# ## Note: this would throw an error later anyway (if the if statement wasn't there) which would be handled in OnLeftClick but it's clearer if I prevent it here
+		# if self.remeasureOptions and clicked not in self.remeasureOptions:
+		# 	return
 		## play if play mode is on 
 		if self.GetTopLevelParent().toolBarPanel.playButton.GetPlayState(): 
 			clicked.Play()
@@ -826,7 +849,9 @@ class PlotPanel(wx.Panel):
 		## used to figure out which vowel is clicked on the plot
 		xyGrid = {(x,y) for x in range(p[0]-5,p[0]+6) for y in range(p[1]-5,p[1]+6)}
 		vowels = [ v for i in xyGrid&self.positionKeys for v in self.positions[i] ]
-		return [v for v in vowels if v in self.visibleVowels and (not self.filteredWord or v.word.upper() == self.filteredWord) and (not self.filteredDurs or self.filteredDurs[0] <= v.duration*1000 <= self.filteredDurs[1])]
+		if self.remeasureOptions:
+			return [v for v in vowels if v in self.remeasureOptions]
+		return [v for v in vowels if v in self.visibleVowels  and (not self.filteredWord or v.word.upper() == self.filteredWord) and (not self.filteredDurs or self.filteredDurs[0] <= v.duration*1000 <= self.filteredDurs[1])]
 
 	def SetRemeasurePermissions(self, value):
 		## sets permission to remeasure vowels on the plot
@@ -899,22 +924,30 @@ class PlotPanel(wx.Panel):
 		self.GetTopLevelParent().past.append(('remove', removeVowels, None))
 		self.GetTopLevelParent().future = [] ## clear redo list
 		self.GetTopLevelParent().toolBarPanel.undoRedoButtons.CheckState()
+		rePlaceCheck = False
 		# Hide all remeasure options if the original is in the box
 		if self.remeasureOptions and self.remeasureOptions[0].original in removeVowels:
 			for v in self.remeasureOptions:
 				v.RemoveVowel()
+				if v.f1 in self.maxmins[:2] or v.f2 in self.maxmins[2:]:
+					rePlaceCheck = True
 		# remove all vowels in the box
 		for v in removeVowels:
 			if v not in self.remeasureOptions[1:]: ## don't remove alternates if the original vowel is still there (see previous for loop)
 				v.RemoveVowel()
+				if v.f1 in self.maxmins[:2] or v.f2 in self.maxmins[2:]:
+					rePlaceCheck = True
 		# reset overlay and redraw the panel
 		if self.HasCapture(): self.ReleaseMouse()
 		self.clearOverlay()
 		self.zoomCoords = []
 		self.CalculateFormantMaxMins()
-		self.PlaceVowels()
+		if rePlaceCheck:
+			self.PlaceVowels()
+		else:
+			self.Refresh()
 		self.drawing = False
-		self.Refresh()
+		
 
 	def ZoomIn(self):
 		## allow zooming 
@@ -990,7 +1023,6 @@ class PlotPanel(wx.Panel):
 		# clear zoom box and redraw buttons
 		if self.HasCapture(): self.ReleaseMouse()
 		self.clearOverlay()
-		self.PlaceVowels()
 		self.zoomCoords = []
 		self.drawing = False
 		# redraw zoombutton bitmap
@@ -1093,7 +1125,7 @@ class PlotPanel(wx.Panel):
 		if not vowelSet: 
 			if self.zooming: return
 			try:
-				self.maxmins = (min(self.f1s)-10, max(self.f1s)+10, min(self.f2s)-10, max(self.f2s)+10)
+				self.maxmins = (min(self.f1s), max(self.f1s), min(self.f2s), max(self.f2s))
 				if self.remeasureOptions:
 					f1s, f2s = [], []
 					for v in self.remeasureOptions:
@@ -1101,7 +1133,7 @@ class PlotPanel(wx.Panel):
 						f1s.append(f1)
 						f2s.append(f2) 
 					
-					self.maxmins = ( min( min(f1s) - 10, self.maxmins[0]), max(max(f1s) + 10, self.maxmins[1]) , min(min(f2s) - 10, self.maxmins[2]) , max(max(f2s) + 10, self.maxmins[3]) )
+					self.maxmins = ( min( min(f1s), self.maxmins[0]), max(max(f1s), self.maxmins[1]) , min(min(f2s), self.maxmins[2]) , max(max(f2s), self.maxmins[3]) )
 			except:
 				return
 		else:
@@ -1114,23 +1146,19 @@ class PlotPanel(wx.Panel):
 					allF2.append(f2)
 				except:
 					print >> sys.stderr, 'no formants found in vowel:\n\n'+str(b)
-			self.maxmins = (min(allF1)-10, max(allF1)+10, min(allF2)-10, max(allF2)+10)
+			self.maxmins = (min(allF1), max(allF1), min(allF2), max(allF2))
 		self.GetTopLevelParent().phonPanel.filterPanel.showVowelStats()
 
-	def OnResize(self, e):
-		## handler when resizing the frame
-		# self.plotBM = wx.EmptyBitmap(*self.GetSize())
-		# self.dc = wx.MemoryDC(self.plotBM)
-		self.PlaceVowels()
-		self.Refresh()
 
-	def PlaceVowels(self):
+	def PlaceVowels(self, altsOnly = False):
 		## places vowels on the plot according to there relative distance from formant mins/maxs
+		## option to only place alternate vowels 
 		self.DrawAxisLabels()
-		self.positions = {}
-		self.positionKeys = set()
-		for b in self.allVowels:
-			b.PlaceBitmap()
+		if not altsOnly :
+			self.positions = {}
+			self.positionKeys = set()
+			for b in self.allVowels:
+				b.PlaceBitmap()
 		for b in self.remeasureOptions[1:]: ## skips first vowel instance since it is the original vowel and already placed above 
 			## this looks redundant (see for loop above) but it is faster to do them seperately since allVowels+remeasureOptions makes a new list
 			b.PlaceBitmap()
@@ -1240,6 +1268,8 @@ class PlotPanel(wx.Panel):
 		except:
 			pass
 		
+		## catches when a remeasurement is cancelled and the remeasured vowels
+		## fall out of the zoomed section of the plot
 		if len(self.positions[position]) > 1: 
 			self.positions[position].remove(vowel)
 		else: 
@@ -1335,7 +1365,7 @@ class PlotPanel(wx.Panel):
 		## gets state of the union/intersect button
 		return self.GetTopLevelParent().phonPanel.unionButton.GetValue()
 
-	def OnUnionButtonPress(self): # uses OnX name even though not technicallly bound to an event (sorry, I like the name)
+	def OnUnionButtonPress(self): # uses OnX name even though not technically bound to an event (sorry, I like the name)
 		## updates self.visibleVowels after union button pressed
 		cmuVowels = [i for cmu in self.cmuLabels for i in self.cmus[cmu]]
 		otherVowels = [i for other in self.otherLabels for i in self.others[other]]
@@ -1350,16 +1380,22 @@ class PlotPanel(wx.Panel):
 
 	def ShowPraatMeasurements(self, e):
 		## when the frame comes back into focus after remeasuring in praat, show the remeasured vowel
+		## 
 		button = self.vowelInFocus
 		if not self.GetRemeasurePermissions() and isfile('praatLog'):
 			button.alternates = button.MakeAlternate(button.ReadPraatAlternates(), 'p')  
 			self.remeasureOptions.append(button)
+			self.CalculateFormantMaxMins()
+			rePlaceCheck = False
 			for a in button.alternates:
 				a.SetBitmap(self.GetPreloadedBitmap('alt'))
 				self.remeasureOptions.append(a)
-			self.CalculateFormantMaxMins()
-			self.PlaceVowels()
-		self.Refresh()
+				if a.f1 in self.maxmins[:2] or a.f2 in self.maxmins[2:]:
+					rePlaceCheck = True
+			if rePlaceCheck:
+				self.PlaceVowels()
+			else:
+				self.PlaceVowels(altsOnly = True)
 
 
 
@@ -1643,20 +1679,28 @@ class CancelButton(wx.Panel):
 		## (only active when a remeasurement is taking place)
 		plotPanel = self.GetTopLevelParent().plotPanel
 		self.button.Disable()
+		rePlaceCheck = False
+		print plotPanel.maxmins
 		if not plotPanel.GetRemeasurePermissions():
 			for rb in plotPanel.remeasureOptions:
+				print rb.f1, rb.f2
 				if rb is not plotPanel.vowelInFocus:
 					plotPanel.RemoveStoredVowelValues(rb, rb.f1, rb.f2, rb.word, rb.duration, rb.cmuType, rb.otherType, rb.position)
 					rb.Hide()
+				if rb.f1 in plotPanel.maxmins[:2] or rb.f2 in plotPanel.maxmins[2:]:
+					rePlaceCheck = True
+
 			plotPanel.remeasureOptions = []
 			
 			plotPanel.vowelInFocus.SetBitmap(plotPanel.vowelInFocus.circleBitmap)
 			plotPanel.vowelInFocus = None
-
 			plotPanel.SetRemeasurePermissions(True)
 			plotPanel.CalculateFormantMaxMins()
-			plotPanel.PlaceVowels()
-
+			
+			if rePlaceCheck:
+				plotPanel.PlaceVowels()
+			else:
+				plotPanel.Refresh()
 
 class OverwriteWarningDialog(wx.Dialog):
 	## custom dialog that warns user when a save will overwrite a pre-existing file
@@ -1821,7 +1865,7 @@ class UndoRedoButtons(wx.Panel):
 		self.CheckState()
 
 	def ExecuteCommand(self, commandType, oldState, newState):
-		## remeasures (or adds back) or removes a vowel according to the command
+		## remeasures or adds back or removes a vowel according to the command
 		if commandType == 'remeasure': 
 			self.topParent.plotPanel.allVowels.remove(newState)
 			self.topParent.plotPanel.RemoveStoredVowelValues(newState, newState.f1, newState.f2, newState.word, newState.duration, newState.cmuType, newState.otherType, newState.position)
@@ -1839,7 +1883,6 @@ class UndoRedoButtons(wx.Panel):
 					self.topParent.plotPanel.allVowels.add(v)
 					self.topParent.plotPanel.AddVowelValues(v, v.f1, v.f2, v.word, v.duration, v.cmuType, v.otherType)
 					v.Show()
-					good, note = self.GetTopLevelParent().toolBarPanel.removeButton.dialog.GetRemoveInfo()
 					v.LogChange()
 		else:
 			print >> sys.stderr, 'bad undo/redo execution command,  shouldn\'t get here'

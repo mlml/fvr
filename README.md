@@ -2,7 +2,7 @@
 ===========================
 ***Formant Visualization and Remeasurement***
 
-(pronounced [\[fivɹ\]](http://www.imdb.com/title/tt0076666/))
+(pronounced [\[fivɹ̩\]](http://www.imdb.com/title/tt0076666/))
 
 ## **Description**
 Plotmish is a python-based formant remeasurement tool. It can be used to correct errors made by automatic formant measurements programs and to annotate the changes.
