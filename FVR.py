@@ -309,11 +309,19 @@ class VowelButton():
 		## if the path to praat is bad it prompts the user to reset it 
 		subprocess.call(['rm', 'praatLog'])
 		try:
+			## opens dialog with button to remeasure in praat
+			## this needs to be shown before opening praat or it will not remain on top of everything
+			logDialog = PraatLogDialog(self.parent, self.wav)
+			logDialog.Show()
+			## open praat and editor to the correct location
 			subprocess.check_output(['open', self.parent.GetTopLevelParent().Praat])
 			subprocess.check_output(['./sendpraat', '0', 'praat',
 							 'execute \"'+join(os.getcwd(),'zoomIn.praat')+'\" \"' + \
 							  self.wav + '\" \"'+join(os.getcwd(),'praatLog')+ '\" ' + \
-							  str(self.timePoint) + ' 1 '+str(self.maxFormant)+'"'])
+							  str(self.timePoint) + ' 1 '+str(self.maxFormant)+'"'])  
+			self.parent.remeasureOptions.append(self)
+			self.parent.Refresh()
+
 		except:
 			if wx.MessageDialog(self.parent, 'Woah, that wasn\'t Praat...\nFind the real Praat?').ShowModal() == wx.ID_OK:
 				self.parent.GetTopLevelParent().OnFindPraat(None)
@@ -729,6 +737,52 @@ class VowelInfo(wx.Frame):
 		self.Fit()
 		self.Show()
 
+class PraatLogDialog(wx.Dialog):
+	## when praat opens up.  Displays buttons that that call Query > Log 1 to measure the 
+	## formants at the cursor.  Also a button to close and prompts a return to the FVR frame
+	def __init__(self, parent, wavFile):
+		wx.Dialog.__init__(self, parent, style = wx.DEFAULT_DIALOG_STYLE|wx.STAY_ON_TOP)
+		## init sizers and controls
+		self.parent = parent
+		sizer = wx.BoxSizer(wx.HORIZONTAL)
+		buttonSizer = wx.BoxSizer(wx.VERTICAL)
+		
+		measureButton = wx.BitmapButton(self, bitmap = wx.Bitmap('icons/control_buttons/donut.png'), size = (55,55))
+		closeButton = wx.Button(self, label = 'Done', size = (55, wx.DefaultSize[1]))
+		measureButton.SetDefault() ## doesn't do much at the moment because the dialog loses focus when clicking in Praat
+
+		measureButton.SetToolTip(wx.ToolTip('Measure formants at the cursor position in Praat\nThis is identical to Query > Log 1 in the Praat window'))
+		closeButton.SetToolTip(wx.ToolTip('Close Praat Window'))
+		## layout panel
+		sizer.AddSpacer(10)
+		sizer.Add(buttonSizer)
+		sizer.AddSpacer(10)
+
+		buttonSizer.AddSpacer(10)
+		buttonSizer.Add(measureButton)
+		buttonSizer.Add(closeButton)
+		buttonSizer.AddSpacer(10)
+		## bind events
+		measureButton.Bind(wx.EVT_BUTTON, self.OnMeasure)
+		closeButton.Bind(wx.EVT_BUTTON, self.OnClose)
+		self.Bind(wx.EVT_CLOSE, self.OnClose)
+		# get wav name as it is displayed in praat
+		self.wavName = basename(wavFile)[:-4].replace('\s','_')
+		self.SetSizerAndFit(sizer)
+
+	def OnMeasure(self, e):
+		## calls log 1 in praat and shows the new vowel on the plot
+		subprocess.check_output(['./sendpraat', 'praat', 'editor: "LongSound '+self.wavName+'" ', 'Log 1'])
+		self.parent.ShowPraatMeasurements()
+
+	def OnClose(self, e):
+		## closes the panel and the praat editor and prompts the user to return to the plot panel
+		subprocess.check_output(['./sendpraat', 'praat', 'removeObject: "LongSound '+self.wavName+'"'])
+		self.parent.CheckRemainingPraatMeasurements()
+		self.parent.GetTopLevelParent().RequestUserAttention()
+		self.Destroy()
+
+
 class PlotPanel(wx.Panel):
 	## panel containing all plotted vowels
 	def __init__(self, parent):
@@ -777,7 +831,6 @@ class PlotPanel(wx.Panel):
 		self.f2MaxLabel.SetForegroundColour('GREY')
 		# bind events
 		self.Bind(wx.EVT_SIZE, self.OnResize)
-		self.GetTopLevelParent().Bind(wx.EVT_ACTIVATE, self.ShowPraatMeasurements) # when frame is reactivated, show remeasured praat vowels 
 		self.Bind(wx.EVT_LEFT_UP, self.OnLeftClick)
 		self.Bind(wx.EVT_RIGHT_UP, self.OnRightClick)
 		self.Bind(wx.EVT_PAINT, self.OnPaint)
@@ -805,19 +858,19 @@ class PlotPanel(wx.Panel):
 	def OnLeftClick(self, e):
 		pos = e.GetPosition()
 		## if removing vowels from the plot
-		# try:
-		if self.removing: ## give removing priority over zooming if both are on
-			if self.drawing: 
-				self.RemoveInBox(pos)
+		try:
+			if self.removing: ## give removing priority over zooming if both are on
+				if self.drawing: 
+					self.RemoveInBox(pos)
+				else:
+					self.GetVowelsInClickRange(pos)[0].RemoveVowel(True) 
+			elif self.zooming:
+				self.DoTheZoom(pos) ## Note that if this fails (ie. actual click instead of end of drawing a box) self.NormalClick will be called
+			## if playing or remeasuring vowels
 			else:
-				self.GetVowelsInClickRange(pos)[0].RemoveVowel(True) 
-		elif self.zooming:
-			self.DoTheZoom(pos) ## Note that if this fails (ie. actual click instead of end of drawing a box) self.NormalClick will be called
-		## if playing or remeasuring vowels
-		else:
-			self.NormalClick(pos)
-		# except:
-		# 	return
+				self.NormalClick(pos)
+		except:
+			return
 
 
 	def OnRightClick(self, e):
@@ -1202,7 +1255,6 @@ class PlotPanel(wx.Panel):
 					else: # get vowel info
 						try:
 							if i.strip(): # makes sure line isn't empty
-								# try:
 								i = i.strip().split(delimiter) ## split the row into a list
 								## make a new button instance according to stuff in the row 
 								## (note some settings are optional)
@@ -1378,25 +1430,43 @@ class PlotPanel(wx.Panel):
 	## the following functions deal with vowel button clicks
 	###--------------------------------###
 
-	def ShowPraatMeasurements(self, e):
+	def ShowPraatMeasurements(self):
 		## when the frame comes back into focus after remeasuring in praat, show the remeasured vowel
-		## 
+		## Called from PraatLogDialog
 		button = self.vowelInFocus
-		if not self.GetRemeasurePermissions() and isfile('praatLog'):
-			button.alternates = button.MakeAlternate(button.ReadPraatAlternates(), 'p')  
-			self.remeasureOptions.append(button)
+		alt = button.MakeAlternate(button.ReadPraatAlternates(), 'p')[0]
+		alt.SetBitmap(self.GetPreloadedBitmap('alt'))
+		button.alternates.append(alt)
+		self.remeasureOptions.append(alt)
+		self.CalculateFormantMaxMins()
+		if alt.f1 in self.maxmins[:2] or alt.f2 in self.maxmins[2:]:
+			self.PlaceVowels()
+		else:
+			alt.PlaceBitmap()
+		subprocess.call(['rm', 'praatLog'])
+		self.Refresh()
+
+	def CheckRemainingPraatMeasurements(self):
+		## if the user uses Query >log 1 instead of clicking in praatlogdialog
+		## this will catch any measurements made
+		## Note: this will only display vowels once praatlogdialog has been closed
+		if isfile('praatLog'):
+			button = self.vowelInFocus
+			alts = button.MakeAlternate(button.ReadPraatAlternates(), 'p')
 			self.CalculateFormantMaxMins()
 			rePlaceCheck = False
-			for a in button.alternates:
+			for a in alts:
 				a.SetBitmap(self.GetPreloadedBitmap('alt'))
+				button.alternates.append(a)
 				self.remeasureOptions.append(a)
 				if a.f1 in self.maxmins[:2] or a.f2 in self.maxmins[2:]:
 					rePlaceCheck = True
 			if rePlaceCheck:
 				self.PlaceVowels()
 			else:
-				self.PlaceVowels(altsOnly = True)
-
+				for a in alts:
+					a.PlaceBitmap()
+			self.Refresh()
 
 
 class PhonPanel(wx.Panel):
