@@ -772,15 +772,112 @@ class PraatLogDialog(wx.Dialog):
 
 	def OnMeasure(self, e):
 		## calls log 1 in praat and shows the new vowel on the plot
-		subprocess.check_output(['./sendpraat', 'praat', 'editor: "LongSound '+self.wavName+'" ', 'Log 1'])
+		try:
+			subprocess.check_output(['./sendpraat', 'praat', 'editor: "LongSound '+self.wavName+'" ', 'Log 1'])
+		except:
+			self.Destroy()
 		self.parent.ShowPraatMeasurements()
-
+		
 	def OnClose(self, e):
 		## closes the panel and the praat editor and prompts the user to return to the plot panel
-		subprocess.check_output(['./sendpraat', 'praat', 'removeObject: "LongSound '+self.wavName+'"'])
-		self.parent.CheckRemainingPraatMeasurements()
+		try:
+			subprocess.check_output(['./sendpraat', 'praat', 'removeObject: "LongSound '+self.wavName+'"'])
+		finally:
+			self.parent.CheckRemainingPraatMeasurements()
+
 		self.parent.GetTopLevelParent().RequestUserAttention()
 		self.Destroy()
+
+class DisambigDialog(wx.Dialog):
+	## miniature version of the plotpanel only showing overlapping vowels
+	def __init__(self, parent, vowels, position):
+		wx.Dialog.__init__(self, parent, style = 0, size = (300, 200))
+		self.parent = parent
+		pos = parent.ClientToScreen(position)
+		self.SetPosition((pos[0]-150, pos[1]-100))
+
+		self.vowels = vowels
+		self.vowelPosition = {}
+		self.maxmins = ()
+
+		self.Place()
+
+		self.Bind(wx.EVT_PAINT, self.OnPaint)
+		self.Bind(wx.EVT_LEFT_UP, self.OnLeftClick)
+		self.Bind(wx.EVT_RIGHT_UP, self.OnRightClick)
+		self.Bind(wx.EVT_ACTIVATE, self.OnClose) 
+
+	def OnClose(self, e):
+		# hides the frame if it loses focus
+		if not e.GetActive() and not self.parent.vowelInfoPanel.IsShown():
+			self.Hide()
+
+	def OnPaint(self, e):
+		## draw to the miniplot
+		dc = wx.PaintDC(self)
+		dc.Clear()
+		dc.SetBrush(wx.Brush('grey', wx.TRANSPARENT))
+		dc.SetPen(wx.Pen('grey'))
+		dc.DrawRectanglePointSize((0,0), self.GetSize())
+		width, height = self.GetSize()
+		if self.maxmins:
+			dc.DrawText(str(self.maxmins[0]), width-30, 15)
+			dc.DrawText(str(self.maxmins[1]), width-30, height-15)
+			dc.DrawText(str(self.maxmins[2]), width-40, 2)
+			dc.DrawText(str(self.maxmins[3]), 2,2)
+
+		dc.DrawText('F1', width-20, height/2)
+		dc.DrawText('F2', width/2, 2)
+
+		for p,v in self.vowelPosition.items():
+			dc.DrawBitmapPoint(v.currentBitmap, (p[0]-5, p[1]-5))
+
+
+	def OnLeftClick(self, e):
+		## process vowel when left clicking 
+		pos = e.GetPosition()
+		vowels = self.GetVowelsInClickRange(pos)
+		selected = self.vowelPosition[vowels[0]]
+		if self.parent.removing:
+			selected.RemoveVowel(True)
+			self.Hide()
+		elif self.parent.GetTopLevelParent().toolBarPanel.playButton.GetPlayState():
+			selected.Play()
+		else:
+			selected.OnRemeasure()
+			self.Hide()
+
+	def OnRightClick(self, e):
+		## show info when right clicking a vowel
+		pos = e.GetPosition()
+		self.parent.vowelInfoPanel.SetPosition(self.ClientToScreen(pos))
+		vowels = self.GetVowelsInClickRange(pos)
+		selected = self.vowelPosition[vowels[0]]
+		self.parent.vowelInfoPanel.UpdateMessage(str(selected))
+
+	def GetVowelsInClickRange(self, p):
+		## simplified version of get vowels in click range from plot panel
+		xyGrid = {(x,y) for x in range(p[0]-5,p[0]+6) for y in range(p[1]-5,p[1]+6)}
+		return [ i for i in xyGrid&set(self.vowelPosition.keys())]		 
+
+	def GetMaxMins(self):
+		f1s = []
+		f2s = []
+		for v in self.vowels:
+			f1s.append(v.f1)
+			f2s.append(v.f2)
+		self.maxmins = (min(f1s)-10, max(f1s)+10, min(f2s)-10, max(f2s)+10)
+		return self.maxmins
+
+	def Place(self):
+		f1Min, f1Max, f2Min, f2Max = self.GetMaxMins()
+		plotWidth, plotHeight = self.GetSize()
+		for v in self.vowels:
+			x = plotWidth - int(plotWidth * (float(v.f2-f2Min)/(f2Max-f2Min)))
+			y = int(plotHeight * (float(v.f1-f1Min)/(f1Max-f1Min)))
+			self.vowelPosition[(x,y)] = v
+		size = self.GetSize()
+		self.SetSize((size[0]+20, size[1]+20))
 
 
 class PlotPanel(wx.Panel):
@@ -813,6 +910,7 @@ class PlotPanel(wx.Panel):
 		self.overlay = wx.Overlay() # draws zoombox to this overlay
 		self.filteredWord = '' # stores word when filtering
 		self.filteredDurs = () # stores min/max durations when filtering
+		self.ignoreclick = False
 		## create vowel bitmaps from files to be used for vowel points on the plot
 		self.BuildVowelBitmaps()
 		## draw labels
@@ -839,7 +937,8 @@ class PlotPanel(wx.Panel):
 
 		# init vowel info panel
 		self.vowelInfoPanel = VowelInfo(self)
-	
+
+
 	def OnResize(self, e):
 		## handler when resizing the frame
 		self.PlaceVowels()
@@ -856,45 +955,42 @@ class PlotPanel(wx.Panel):
 
 
 	def OnLeftClick(self, e):
+		if self.ignoreclick:
+			self.ignoreclick = False
+			return
 		pos = e.GetPosition()
 		## if removing vowels from the plot
-		try:
-			if self.removing: ## give removing priority over zooming if both are on
-				if self.drawing: 
-					self.RemoveInBox(pos)
-				else:
-					self.GetVowelsInClickRange(pos)[0].RemoveVowel(True) 
-			elif self.zooming:
-				self.DoTheZoom(pos) ## Note that if this fails (ie. actual click instead of end of drawing a box) self.NormalClick will be called
-			## if playing or remeasuring vowels
+		if self.removing: ## give removing priority over zooming if both are on
+			if self.drawing: 
+				self.RemoveInBox(pos)
 			else:
-				self.NormalClick(pos)
-		except:
-			return
+				self.GetVowelsInClickRange(pos).RemoveVowel(True) 
+		elif self.zooming:
+			self.DoTheZoom(pos) ## Note that if this fails (ie. actual click instead of end of drawing a box) self.NormalClick will be called
+		## if playing or remeasuring vowels
+		else:
+			self.NormalClick(pos)
 
 
 	def OnRightClick(self, e):
-		try:
-			pos = e.GetPosition()
-			self.vowelInfoPanel.SetPosition(self.ClientToScreen(pos))
-			vowel = self.GetVowelsInClickRange(pos)[0]
-			if vowel: self.vowelInfoPanel.UpdateMessage(str(vowel))
-		except:
-			pass  ## TODO: don't pass when excepting, write to sys.stderr instead (for all passes) 
+		if self.ignoreclick:
+			self.ignoreclick = False
+			return
+		pos = e.GetPosition()
+		self.vowelInfoPanel.SetPosition(self.ClientToScreen(pos))
+		vowel = self.GetVowelsInClickRange(pos)
+		if vowel: self.vowelInfoPanel.UpdateMessage(str(vowel))
 	
 	def NormalClick(self, pos):
 		## processes a normal click on the plot (not a click and drag)
-		clicked = self.GetVowelsInClickRange(pos)[0]
-		# ## if remeasuring and clicked is not a remeasure option
-		# ## Note: this would throw an error later anyway (if the if statement wasn't there) which would be handled in OnLeftClick but it's clearer if I prevent it here
-		# if self.remeasureOptions and clicked not in self.remeasureOptions:
-		# 	return
-		## play if play mode is on 
-		if self.GetTopLevelParent().toolBarPanel.playButton.GetPlayState(): 
-			clicked.Play()
-		## otherwise process remeasurement
-		else:
-			clicked.OnRemeasure()
+		clicked = self.GetVowelsInClickRange(pos)
+		if clicked:
+			## if remeasuring and clicked is not a remeasure option
+			if self.GetTopLevelParent().toolBarPanel.playButton.GetPlayState(): 
+				clicked.Play()
+			## otherwise process remeasurement
+			else:
+				clicked.OnRemeasure()
 
 
 	def GetVowelsInClickRange(self, p):
@@ -903,8 +999,25 @@ class PlotPanel(wx.Panel):
 		xyGrid = {(x,y) for x in range(p[0]-5,p[0]+6) for y in range(p[1]-5,p[1]+6)}
 		vowels = [ v for i in xyGrid&self.positionKeys for v in self.positions[i] ]
 		if self.remeasureOptions:
-			return [v for v in vowels if v in self.remeasureOptions]
-		return [v for v in vowels if v in self.visibleVowels  and (not self.filteredWord or v.word.upper() == self.filteredWord) and (not self.filteredDurs or self.filteredDurs[0] <= v.duration*1000 <= self.filteredDurs[1])]
+			inRange = [v for v in vowels if v in self.remeasureOptions]
+			if len(inRange) > 1:
+				self.DisambigOverlappingVowels(inRange, p)
+				return
+			else:
+				return inRange[0]
+		else:
+			inRange = [v for v in vowels if v in self.visibleVowels  and (not self.filteredWord or v.word.upper() == self.filteredWord) and (not self.filteredDurs or self.filteredDurs[0] <= v.duration*1000 <= self.filteredDurs[1])]
+			if len(inRange) > 1:
+				self.DisambigOverlappingVowels(inRange, p)
+				return 
+			else:
+				return inRange[0]
+
+	def DisambigOverlappingVowels(self, vowels, pos):
+		## creates mini panel when overlapping vowels are clicked
+		## spacing them out so the correct one can be clicked 
+		disambigDialog = DisambigDialog(self, vowels, pos)
+		disambigDialog.Show()
 
 	def SetRemeasurePermissions(self, value):
 		## sets permission to remeasure vowels on the plot
@@ -933,6 +1046,7 @@ class PlotPanel(wx.Panel):
 
 	def DrawAxisLabels(self):
 		## Redraws axis labels (used when resizing)
+		## TODO: draw all of this in OnPaint
 		width, height = self.GetAdjustedSize()
 		self.f1Label.SetPosition((width , height/2))
 		self.f2Label.SetPosition((width/2 , 0))
@@ -2746,6 +2860,8 @@ class mainFrame(wx.Frame):
 
 		self.Bind(wx.EVT_MENU, self.OnNewPA, altPAItem)
 
+		self.Bind(wx.EVT_ACTIVATE, self.OnActivate)
+
 		#create list for storing open files
 		self.openFiles = []	
 
@@ -2753,6 +2869,10 @@ class mainFrame(wx.Frame):
 		self.ReadConfig()
 		self.Centre()
 		self.Show(True)
+
+	def OnActivate(self, e):
+		if not e.GetActive():
+			self.plotPanel.ignoreclick = True
 
 	def ReadConfig(self):
 		# read from the config file to get the info file headings
@@ -2918,5 +3038,6 @@ class mainFrame(wx.Frame):
 if __name__ == "__main__":
 	## Where it all begins
 	app = wx.App(False)
+	app.SetCallFilterEvent(True)
 	frame = mainFrame()
 	app.MainLoop()
