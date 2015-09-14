@@ -248,6 +248,7 @@ class VowelButton():
 			## now hide alternate vowels that are off the plot (now that they have received a position value)
 			if self.original and (f1Max >= self.f1 >= f1Min or f2Max >= self.f2 >= f2Min):
 				self.Hide()
+
 		else:
 			self.Hide()
 
@@ -311,8 +312,7 @@ class VowelButton():
 		try:
 			## opens dialog with button to remeasure in praat
 			## this needs to be shown before opening praat or it will not remain on top of everything
-			logDialog = PraatLogDialog(self.parent, self.wav)
-			logDialog.Show()
+			self.parent.logDialog = PraatLogDialog(self.parent, self.wav)
 			## open praat and editor to the correct location
 			subprocess.check_output(['open', self.parent.GetTopLevelParent().Praat])
 			subprocess.check_output(['./sendpraat', '0', 'praat',
@@ -769,24 +769,29 @@ class PraatLogDialog(wx.Dialog):
 		# get wav name as it is displayed in praat
 		self.wavName = basename(wavFile)[:-4].replace('\s','_')
 		self.SetSizerAndFit(sizer)
+		self.Show()
 
 	def OnMeasure(self, e):
 		## calls log 1 in praat and shows the new vowel on the plot
 		try:
 			subprocess.check_output(['./sendpraat', 'praat', 'editor: "LongSound '+self.wavName+'" ', 'Log 1'])
 		except:
-			self.Destroy()
+			self.parent.logDialog = None
+			self.Destroy()	
 		self.parent.ShowPraatMeasurements()
+
 		
 	def OnClose(self, e):
 		## closes the panel and the praat editor and prompts the user to return to the plot panel
 		try:
 			subprocess.check_output(['./sendpraat', 'praat', 'removeObject: "LongSound '+self.wavName+'"'])
-		finally:
-			self.parent.CheckRemainingPraatMeasurements()
-
+		except:
+			pass
+		self.parent.CheckRemainingPraatMeasurements()
 		self.parent.GetTopLevelParent().RequestUserAttention()
+		self.parent.logDialog = None
 		self.Destroy()
+
 
 class DisambigDialog(wx.Dialog):
 	## miniature version of the plotpanel only showing overlapping vowels
@@ -861,23 +866,27 @@ class DisambigDialog(wx.Dialog):
 		return [ i for i in xyGrid&set(self.vowelPosition.keys())]		 
 
 	def GetMaxMins(self):
+		## returns and sets self.maxmins (probably shouldn't have Get in the name <-- confusing)
 		f1s = []
 		f2s = []
 		for v in self.vowels:
 			f1s.append(v.f1)
 			f2s.append(v.f2)
-		self.maxmins = (min(f1s)-10, max(f1s)+10, min(f2s)-10, max(f2s)+10)
+		self.maxmins = (min(f1s), max(f1s), min(f2s), max(f2s))
 		return self.maxmins
 
 	def Place(self):
+		## places all vowels on the miniplot
 		f1Min, f1Max, f2Min, f2Max = self.GetMaxMins()
 		plotWidth, plotHeight = self.GetSize()
 		for v in self.vowels:
-			x = plotWidth - int(plotWidth * (float(v.f2-f2Min)/(f2Max-f2Min)))
-			y = int(plotHeight * (float(v.f1-f1Min)/(f1Max-f1Min)))
+			x = plotWidth - int(plotWidth * (float(v.f2-f2Min)/(f2Max-f2Min))) + 30
+			y = int(plotHeight * (float(v.f1-f1Min)/(f1Max-f1Min))) + 30
 			self.vowelPosition[(x,y)] = v
 		size = self.GetSize()
-		self.SetSize((size[0]+20, size[1]+20))
+		## increase the size of the panel so vowels won't be right on the edge
+		## the increase should be double the constant at the end of the x,y calculations above
+		self.SetSize((size[0]+60, size[1]+60))
 
 
 class PlotPanel(wx.Panel):
@@ -910,7 +919,8 @@ class PlotPanel(wx.Panel):
 		self.overlay = wx.Overlay() # draws zoombox to this overlay
 		self.filteredWord = '' # stores word when filtering
 		self.filteredDurs = () # stores min/max durations when filtering
-		self.ignoreclick = False
+		self.ignoreclick = False # when set to True, the next mouse click will be ignored (used when reactivating plot panel)
+		self.stdDev = 0 ## stores current number of std devs displayed by the confidence ellipse (0 = no ellipse)
 		## create vowel bitmaps from files to be used for vowel points on the plot
 		self.BuildVowelBitmaps()
 		## draw labels
@@ -935,8 +945,10 @@ class PlotPanel(wx.Panel):
 		self.Bind(wx.EVT_LEFT_DOWN, self.StartZoomBox)
 		self.Bind(wx.EVT_MOTION, self.DrawZoomBox)
 
+
 		# init vowel info panel
 		self.vowelInfoPanel = VowelInfo(self)
+		self.logDialog = None
 
 
 	def OnResize(self, e):
@@ -952,10 +964,12 @@ class PlotPanel(wx.Panel):
 			dc.DrawBitmapPoint(b.currentBitmap, b.GetAdjustedBitmapPosition())
 		for b in self.remeasureOptions:
 			dc.DrawBitmapPoint(b.currentBitmap, b.GetAdjustedBitmapPosition())
+		if self.stdDev and self.visibleVowels:
+			dc.DrawBitmapPoint(*self.DrawConfidenceEllipse(self.stdDev))
 
 
 	def OnLeftClick(self, e):
-		if self.ignoreclick:
+		if self.ignoreclick and not self.drawing: ## only ignores single click not click and drag	
 			self.ignoreclick = False
 			return
 		pos = e.GetPosition()
@@ -1245,13 +1259,14 @@ class PlotPanel(wx.Panel):
 		if angleAdjust: ellipImg = ellipImg.Mirror(False)
 		# clear dc and overlay
 		dc.SelectObject( wx.NullBitmap )
-		dc = wx.ClientDC(self)
-		odc = wx.DCOverlay(self.overlay, dc)
-		odc.Clear()
+		# dc = wx.ClientDC(self)
+		# odc = wx.DCOverlay(self.overlay, dc)
+		# odc.Clear()
 		# draw ellipse to the plot (given the centre point)
 		imgWidth, imgHeight = ellipImg.GetSize()
-		dc.DrawBitmapPoint(ellipImg.ConvertToBitmap(), (mean[0] - imgWidth/2 , mean[1] - imgHeight/2))
-		del odc
+		return (ellipImg.ConvertToBitmap(), (mean[0] - imgWidth/2 , mean[1] - imgHeight/2))
+		# dc.DrawBitmapPoint(ellipImg.ConvertToBitmap(), (mean[0] - imgWidth/2 , mean[1] - imgHeight/2))
+		# del odc
 
 	###--------------------------------###
 	## functions for reading vowel information on startup
@@ -1329,13 +1344,6 @@ class PlotPanel(wx.Panel):
 		for b in self.remeasureOptions[1:]: ## skips first vowel instance since it is the original vowel and already placed above 
 			## this looks redundant (see for loop above) but it is faster to do them seperately since allVowels+remeasureOptions makes a new list
 			b.PlaceBitmap()
-		self.Refresh()
-
-		## hides stdDev ellipse when remeasuring
-		self.clearOverlay()
-		sdButton = self.GetTopLevelParent().toolBarPanel.stdDevButtons
-		if sdButton.IsOn():
-			sdButton.OnClick(None)
 		self.Refresh()
 
 
@@ -1741,6 +1749,8 @@ class StdDevButtons(wx.Panel):
 	def OnClick(self, e):
 		## toggles radiobuttons when main button is clicked and draws the ellipse (if on)
 		plotPanel = self.GetTopLevelParent().plotPanel
+		self.on = False
+		plotPanel.stdDev = 0
 		if self.oneButton.GetValue(): 
 			self.oneButton.SetValue(False)
 			plotPanel.clearOverlay()
@@ -1756,7 +1766,8 @@ class StdDevButtons(wx.Panel):
 		else: 
 			self.button.SetBitmapLabel(self.onBitmap)
 			self.recentlyPressed.SetValue(True)
-			plotPanel.DrawConfidenceEllipse( int(self.recentlyPressed.GetLabel()) )
+			plotPanel.stdDev = int(self.recentlyPressed.GetLabel())
+		plotPanel.Refresh()
 			
 
 	def RadioClick(self, e):
@@ -1765,13 +1776,9 @@ class StdDevButtons(wx.Panel):
 		plotPanel = self.GetTopLevelParent().plotPanel
 		pressed = e.GetEventObject()
 		self.recentlyPressed = pressed
-		plotPanel.DrawConfidenceEllipse( int(pressed.GetLabel()) )
+		plotPanel.stdDev = int(pressed.GetLabel())
+		plotPanel.Refresh()
 		
-	def IsOn(self):
-		## gets the current state of the button
-		if self.button.GetBitmapLabel() == self.onBitmap:
-			return True
-		return False
 
 
 class ZoomButton(wx.Panel):
@@ -1864,7 +1871,6 @@ class CancelButton(wx.Panel):
 		plotPanel = self.GetTopLevelParent().plotPanel
 		self.button.Disable()
 		rePlaceCheck = False
-		print plotPanel.maxmins
 		if not plotPanel.GetRemeasurePermissions():
 			for rb in plotPanel.remeasureOptions:
 				print rb.f1, rb.f2
@@ -1885,6 +1891,9 @@ class CancelButton(wx.Panel):
 				plotPanel.PlaceVowels()
 			else:
 				plotPanel.Refresh()
+		if plotPanel.logDialog:
+			## close praat log dialog if its open
+			plotPanel.logDialog.OnClose(None)
 
 class OverwriteWarningDialog(wx.Dialog):
 	## custom dialog that warns user when a save will overwrite a pre-existing file
@@ -2871,6 +2880,8 @@ class mainFrame(wx.Frame):
 		self.Show(True)
 
 	def OnActivate(self, e):
+		## a click that brings the frame into focus will not permit the next vowel click to occur
+		## this allows easier exiting from infodialog and disambigdialog (they close when they lose focus)
 		if not e.GetActive():
 			self.plotPanel.ignoreclick = True
 
