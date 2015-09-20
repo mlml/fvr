@@ -1,3 +1,4 @@
+#/Applications/Praat.app
 /Users/misha/Desktop/dru/dru04-day1-Mohamed-0417.wav	/Users/misha/Desktop/druInfo_celex/test/dru04-day1-Mohamed-0417-formant.txt
 /Users/misha/Desktop/dru/dru04-day2-Alexandra-0707.wav	/Users/misha/Desktop/druInfo_celex/test/dru04-day2-Alexandra-0707-formant.txt
 /Users/misha/Desktop/dru/dru04-day2-Jennifer-2211.wav	/Users/misha/Desktop/druInfo_celex/test/dru04-day2-Jennifer-2211-formant.txt

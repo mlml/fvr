@@ -975,6 +975,8 @@ class PlotPanel(wx.Panel):
 		self.f2MinLabel.SetForegroundColour('GREY')
 		self.f2MaxLabel = wx.StaticText(self)
 		self.f2MaxLabel.SetForegroundColour('GREY')
+		# init list for lines describing the grid behind the plot
+		self.gridlines = []
 		# bind events
 		self.Bind(wx.EVT_SIZE, self.OnResize)
 		self.Bind(wx.EVT_LEFT_UP, self.OnLeftClick)
@@ -996,9 +998,10 @@ class PlotPanel(wx.Panel):
 	def OnPaint(self, e):
 		dc = wx.PaintDC(self)
 		dc.Clear()
+		dc.DrawLineList(self.gridlines, pens =  wx.Pen('Grey', 1))
 		for b in self.visibleVowels:
 			if self.filtering:
-				if not re.match(self.filtering['word'], b.word.upper()): continue
+				if not re.match(self.filtering['word'], b.word.uspper()): continue
 				if not self.filtering['durs'][0] <= int(b.duration*1000) <= self.filtering['durs'][1]: continue
 				if b.stress not in self.filtering['stress']: 
 					continue
@@ -1097,7 +1100,6 @@ class PlotPanel(wx.Panel):
 
 	def DrawAxisLabels(self):
 		## Redraws axis labels (used when resizing)
-		## TODO: draw all of this in OnPaint
 		width, height = self.GetAdjustedSize()
 		self.f1Label.SetPosition((width , height/2))
 		self.f2Label.SetPosition((width/2 , 0))
@@ -1109,6 +1111,20 @@ class PlotPanel(wx.Panel):
 		self.f1MaxLabel.SetLabel(str(self.maxmins[1]) if self.maxmins else '')
 		self.f2MinLabel.SetLabel(str(self.maxmins[2]) if self.maxmins else '')
 		self.f2MaxLabel.SetLabel(str(self.maxmins[3]) if self.maxmins else '')
+		if self.maxmins:
+			## set lines for gridlines
+			# gridlines offset by 100 Hz 
+			f1Min, f1Max, f2Min, f2Max = self.maxmins
+			xOffset = int(width * (100.0/(f2Max-f2Min))) 
+			yOffset = int(height * (100.0/(f1Max-f1Min))) 
+			# define location finding functions (for readability)
+			roundTo = lambda x, to, up = True: x - x%to + (to if up else 0) # fun little rounding function: x = value to round, to = round to closest multiple of this value, up = round up if True else round down
+			leftBound = width - int(width * (float(roundTo(f2Max,100, False)-f2Min)/(f2Max-f2Min))) + 10
+			topBound = int(height * (float(roundTo(f1Min, 100)-f1Min)/(f1Max-f1Min))) + 10
+			# define lines
+			vertLines = [(i,0,i,height+20) for i in range(leftBound, width, xOffset)]  # height+20 to accomodate for adjusted size
+			horLines = [(0,i, width+20, i) for i in range(topBound, height, yOffset)]
+			self.gridlines = vertLines + horLines
 
 	def BuildVowelBitmaps(self):
 		## creates vowel bitmaps from icon files on startup 
@@ -2854,7 +2870,7 @@ class mainFrame(wx.Frame):
 
 		self.SetSizer(self.mainSizer)
 		## default Location of praat 
-		self.Praat = '/Applications/Praat.app'
+		self.Praat = self.GetPraatLocation()
 
 		## setup menu bar
 		menubar = wx.MenuBar()
@@ -2951,6 +2967,13 @@ class mainFrame(wx.Frame):
 		## returns name of alternate phonetic alphabet
 		return self.otherLabel
 
+	def GetPraatLocation(self):
+		with open('recent_files.txt') as rfiles:
+			for line in rfiles:
+				if line[0] == '#':
+					return line[1:].strip()
+					break
+
 
 	def OnNewPA(self, e):
 		## opens dialog to set a new phonetic alphabet
@@ -3025,6 +3048,17 @@ class mainFrame(wx.Frame):
 		praatDialog = wx.FileDialog(self, message = 'Find location of Praat', style = wx.FD_OPEN, wildcard = ".app")
 		if praatDialog.ShowModal() == wx.ID_OK:
 			self.Praat = praatDialog.GetPath()
+			# save self.praat in recent_files savefile
+			lines = ['#'+self.Praat+'\n']
+			with open('recent_files.txt') as rfiles:
+				for line in rfiles:
+					if line[0] == '#': continue
+					lines.append(line)
+			with open('recent_files.txt','w') as rfiles:
+				for l in lines:
+					rfiles.write(l)
+
+
 			
 	def OnOpenRecent(self, e):
 		## opens most recenlty opened files 
@@ -3032,6 +3066,7 @@ class mainFrame(wx.Frame):
 		infoFiles = []
 		with open('recent_files.txt', 'r') as recentF:
 			for line in recentF:
+				if line[0] == '#': continue
 				files = line.strip('\n').split('\t')
 				wavFiles.append(files[0])
 				infoFiles.append(files[1])
