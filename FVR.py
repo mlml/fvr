@@ -1,5 +1,12 @@
 # -*- coding: utf-8 -*-
-import wx, re, subprocess, os, sys, wave, glob, time
+import wx
+import re
+import subprocess
+import os
+import sys
+import wave
+import glob
+import time
 from os.path import isdir, isfile, join, basename, dirname
 import numpy as np
 
@@ -813,7 +820,7 @@ class PraatLogDialog(wx.Dialog):
 	def OnMeasure(self, e):
 		## calls log 1 in praat and shows the new vowel on the plot
 		try:
-			subprocess.check_output(['./sendpraat', 'praat', 'editor: "LongSound '+self.wavName+'" ', 'Log 1'])
+			print subprocess.check_output(['./sendpraat', 'praat', 'editor: "LongSound '+self.wavName+'" ', 'Log 1'])
 		except:
 			self.parent.logDialog = None
 			self.Destroy()	
@@ -1001,7 +1008,7 @@ class PlotPanel(wx.Panel):
 		dc.DrawLineList(self.gridlines, pens =  wx.Pen('Grey', 1))
 		for b in self.visibleVowels:
 			if self.filtering:
-				if not re.match(self.filtering['word'], b.word.uspper()): continue
+				if not re.match(self.filtering['word'], b.word.upper()): continue
 				if not self.filtering['durs'][0] <= int(b.duration*1000) <= self.filtering['durs'][1]: continue
 				if b.stress not in self.filtering['stress']: 
 					continue
@@ -1926,7 +1933,6 @@ class CancelButton(wx.Panel):
 		rePlaceCheck = False
 		if not plotPanel.GetRemeasurePermissions():
 			for rb in plotPanel.remeasureOptions:
-				print rb.f1, rb.f2
 				if rb is not plotPanel.vowelInFocus:
 					plotPanel.RemoveStoredVowelValues(rb, rb.f1, rb.f2, rb.word, rb.duration, rb.cmuType, rb.otherType, rb.position)
 					rb.Hide()
@@ -2199,7 +2205,8 @@ class ToolBar(wx.Panel):
 		sizer = wx.BoxSizer(wx.HORIZONTAL)
 		self.playButton = PlayButton(self)
 		self.stdDevButtons = StdDevButtons(self)
-		self.zoomButton = ZoomButton(self)
+		# self.zoomButton = ZoomButton(self) 	# not implemented until bug where zooming happens too 
+												# early on some systems is resolved (issue #14)
 		self.reMeasureButton = ReMeasureButton(self)
 		self.cancelButton = CancelButton(self)
 		self.saveButton = SaveButton(self)
@@ -2211,8 +2218,8 @@ class ToolBar(wx.Panel):
 		sizer.AddSpacer(3)
 		sizer.Add(self.stdDevButtons, flag = wx.EXPAND)
 		sizer.AddSpacer(3)
-		sizer.Add(self.zoomButton, flag = wx.EXPAND)
-		sizer.AddSpacer(3)
+		# sizer.Add(self.zoomButton, flag = wx.EXPAND)
+		# sizer.AddSpacer(3)
 		sizer.Add(self.reMeasureButton, flag = wx.EXPAND)
 		sizer.AddSpacer(3)
 		sizer.Add(self.cancelButton, flag = wx.EXPAND)
