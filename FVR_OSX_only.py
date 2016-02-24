@@ -7,48 +7,46 @@ import sys
 import wave
 import glob
 import time
-import platform
 from os.path import isdir, isfile, join, basename, dirname
 import numpy as np
-
-if platform.system() == 'Darwin':
-	SENDPRAAT = join('bin','sendpraat_carbon')
-	OPEN = 'open'
-elif platform.system() == 'Windows':
-	SENDPRAAT = join('bin','sendpraat_carbon')
-	OPEN = None
-elif platform.system() == 'Linux':
-	if '32' in platform.architecture()[0]:
-		SENDPRAAT = join('bin','sendpraat_gtk32')
-	elif '64' in platform.architecture()[0]:
-		SENDPRAAT = join('bin','sendpraat_gtk64')
-	else:
-		raise Exception('Unable to determine system architecture (32 or 64 bit?)')
-	OPEN = 'xdg-open'
-else:
-	raise Exception('Unable to determine system (Darwin, Windows, or Linux?)')
 
 ## list of cmu vowels sorted into columns (as displayed on the window)
 cmu = [('IY', 'IH', 'EY', 'EH', 'AE'), ('', '','AH', '', ''), ('UW', 'UH', 'OW', 'AO', 'AA'), ('AY','OY', 'AW', 'IW', 'ER')]
 
-## dictionary mapping cmu labels to colours
+def DrawCaptionOntoBitmap(imageFile, captionTxt):
+	## adapted from Ray Pasco's comment at https://groups.google.com/forum/#!topic/wxpython-users/9UYtstGL6tU
+	## comments are by Ray in this function
+	# Create a dc "canvas" onto which the caption text will be drawn
+	# in order to get the text's extent (size).
+	bmSize = (100, 100)     # any size larger than the expexted text extent.
+	bm = wx.EmptyBitmap( *bmSize )
+	dc = wx.MemoryDC(bm)
+	txtPos = (10, 10)                     # an offset so the text doesn't get clipped
+	dc.DrawText(captionTxt, *txtPos)
+	txtWid, txtHgt = dc.GetTextExtent( captionTxt )
+	dc.SelectObject( wx.NullBitmap )        # done with this dc; not used again
 
-colourDict = {'IY':(238,155,50), 
-			  'IH':(139,69,26), 
-			  'EY':(141,51,139), 
-			  'EH':(235,95,67), 
-			  'AE':(216,191,216),
-			  'AH':(127,242,5),
-			  'UW':(120,120,120), 
-			  'UH':(233,101,178), 
-			  'OW':(79,192,251), 
-			  'AO':(233,63,51), 
-			  'AA':(122,247,212),
-			  'AY':(90,180,113),
-			  'OY':(65,105,225), 
-			  'AW':(107,142,35), 
-			  'IW':(140,34,27), 
-			  'ER':(127,242,5)}
+	# Draw the caption on the file graphic bitmap.
+	if imageFile:
+		imgBmap = wx.Image( imageFile, wx.BITMAP_TYPE_ANY ).ConvertToBitmap()
+	else:
+		imgBmap = wx.EmptyBitmap(60,60)
+	bmapX, bmapY = imgBmap.GetSize()
+
+
+	# Create a dc "canvas" onto which the caption text  will be drawn
+	dc = wx.MemoryDC( imgBmap )
+	dc.SetBrush( wx.Brush( wx.Colour( 0, 0, 0 ), wx.SOLID ) )
+
+	# Draw text at the top of the bitmap
+	txtPosX = (bmapX - txtWid) / 2
+	txtPosY = (bmapY - txtHgt) / 2
+	dc.DrawText( captionTxt, txtPosX, txtPosY )
+
+	# Done doing text drawing.
+	dc.SelectObject( wx.NullBitmap )        # Done with this dc
+
+	return imgBmap
 
 def UpdateFAVE(filePath, outPath):
 	## converts layout of formant.txt files output from FAVE-extract
@@ -179,8 +177,7 @@ class VowelButton():
 		## play the new wav file then remove it 
 		sound = wx.Sound('temp.wav')
 		sound.Play()
-		try: os.remove('temp.wav')
-		except: pass
+		subprocess.call(['rm','temp.wav'])
 		## This does the same thing as above but requires SoX to run 
 		# subprocess.call(['play',self.wav,'trim', str(self.min), '='+str(self.max)]) 
 
@@ -318,19 +315,14 @@ class VowelButton():
 	def MakePraatAlternates(self):
 		## opens praat to the vowel position
 		## if the path to praat is bad it prompts the user to reset it 
-		try: os.remove('praatLog')
-		except: pass
+		subprocess.call(['rm', 'praatLog'])
 		try:
 			## opens dialog with button to remeasure in praat
 			## this needs to be shown before opening praat or it will not remain on top of everything
 			self.parent.logDialog = PraatLogDialog(self.parent, self.wav)
 			## open praat and editor to the correct location
-			print self.parent.GetTopLevelParent().Praat
-			if OPEN:
-				subprocess.check_output([OPEN, self.parent.GetTopLevelParent().Praat])
-			else:
-				subprocess.check_output('"'+self.parent.GetTopLevelParent().Praat+'"')
-			subprocess.check_output([SENDPRAAT, '0', 'praat',
+			subprocess.check_output(['open', self.parent.GetTopLevelParent().Praat])
+			subprocess.check_output(['./sendpraat', '0', 'praat',
 							 'execute \"'+join(os.getcwd(),'zoomIn.praat')+'\" \"' + \
 							  self.wav + '\" \"'+join(os.getcwd(),'praatLog')+ '\" ' + \
 							  str(self.timePoint) + ' 1 '+str(self.maxFormant)+'"'])  
@@ -468,8 +460,8 @@ class FilterPanel(wx.Panel):
 		maxSizer = wx.BoxSizer(wx.HORIZONTAL)
 
 		## define title and main button
-		self.filterBit = wx.Bitmap(join('icons','control_buttons','filter.png'))
-		self.cancelBit = wx.Bitmap(join('icons','control_buttons','filter_on.png'))
+		self.filterBit = wx.Bitmap('icons/control_buttons/filter.png')
+		self.cancelBit = wx.Bitmap('icons/control_buttons/filter_on.png')
 		self.button = wx.BitmapButton(self, bitmap = self.filterBit, size = (55,55))
 		titleText = wx.StaticText(self, label = "FILTER", style = wx.ALIGN_CENTER)
 		## define list of words in the plot
@@ -637,15 +629,16 @@ class FilterPanel(wx.Panel):
 
 
 
-class PhonButton(wx.Button):
+class CmuButton(wx.BitmapButton):
 	## button subclass representing all cmu vowels
-	def __init__(self, parent, label, other = False):
-		# init button
-		wx.Button.__init__(self, parent, label = label, size = (37,25))
+	def __init__(self, parent, label):
+		# load bitmaps from icons/plot_buttons
+		self.onBitmap = wx.Bitmap('icons/plot_buttons/'+label+'/onButton.png')
+		self.offBitmap = wx.Bitmap('icons/plot_buttons/'+label+'/offButton.png')
+		#init button
+		wx.BitmapButton.__init__(self, parent, bitmap = self.offBitmap, size = (35,25))
 		self.label = label
-		self.other = other
 		self.value = False
-		self.colour = self.GetColour()
 		# bind events
 		self.Bind(wx.EVT_BUTTON, self.OnPress)
 
@@ -653,29 +646,49 @@ class PhonButton(wx.Button):
 		## update list of vowels shown on plotpanel when pressed
 		plotpanel = self.GetTopLevelParent().plotPanel
 		if self.value:
-			# self.SetBitmapLabel(self.offBitmap)
-			self.SetBackgroundColour(None)
+			self.SetBitmapLabel(self.offBitmap)
 			self.value = False
-			if self.other:
-				plotpanel.RemoveOther(self.label)
-			else:
-				plotpanel.RemoveCmu(self.label)
+			plotpanel.RemoveCmu(self.label)
 		else:
-			#self.SetBitmapLabel(self.onBitmap)
-			self.SetBackgroundColour(self.colour)
+			self.SetBitmapLabel(self.onBitmap)
 			self.value = True
-			if self.other:
-				plotpanel.AddOther(self.label)
-			else:
-				plotpanel.AddCmu(self.label)
-		plotpanel.Refresh()
-		self.Refresh()		
+			plotpanel.AddCmu(self.label)
+		plotpanel.Refresh()		
 
-	def GetColour(self):
-		if self.other:
-			return (79,192,251)
+	def SetValue(self, value):
+		## allows the master button to toggle the button
+		self.value = not value
+		self.OnPress(None)
+
+	def GetValue(self):
+		## returns current button value
+		return self.value
+
+class OtherButton(wx.BitmapButton):
+	## button subclass representing all other (alternate phonetic alphabet) vowels
+	def __init__(self, parent, label):
+		# load bitmaps (draws labels onto generic backgrounds)
+		self.onBitmap = DrawCaptionOntoBitmap('icons/other_background.png', label)
+		self.offBitmap = DrawCaptionOntoBitmap(None, label)
+		# init button
+		wx.BitmapButton.__init__(self, parent, bitmap = self.offBitmap, size = (35,25))
+		self.label = label
+		self.value = False
+		# bind events
+		self.Bind(wx.EVT_BUTTON, self.OnPress)
+
+	def OnPress(self, e):
+		## update list of vowels shown on plotpanel when pressed
+		plotpanel = self.GetTopLevelParent().plotPanel
+		if self.value:
+			self.SetBitmapLabel(self.offBitmap)
+			self.value = False
+			plotpanel.RemoveOther(self.label)
 		else:
-			return colourDict[self.label]
+			self.SetBitmapLabel(self.onBitmap)
+			self.value = True
+			plotpanel.AddOther(self.label)
+		plotpanel.Refresh()			
 
 	def SetValue(self, value):
 		## allows the master button to toggle the button
@@ -691,8 +704,8 @@ class UButton(wx.BitmapButton):
 	## the selected cmu and other vowels 
 	def __init__(self, parent):
 		## load bitmaps
-		self.unionBit = wx.Bitmap(join('icons','control_buttons','union.png'))
-		self.intersectBit = wx.Bitmap(join('icons','control_buttons','intersect.png'))
+		self.unionBit = wx.Bitmap('icons/control_buttons/union.png')
+		self.intersectBit = wx.Bitmap('icons/control_buttons/intersect.png')
 		# init button
 		wx.BitmapButton.__init__(self, parent = parent, bitmap = self.unionBit)
 		self.value = True
@@ -780,7 +793,7 @@ class PraatLogDialog(wx.Dialog):
 		sizer = wx.BoxSizer(wx.HORIZONTAL)
 		buttonSizer = wx.BoxSizer(wx.VERTICAL)
 		
-		measureButton = wx.BitmapButton(self, bitmap = wx.Bitmap(join('icons','control_buttons','donut.png')), size = (55,55))
+		measureButton = wx.BitmapButton(self, bitmap = wx.Bitmap('icons/control_buttons/donut.png'), size = (55,55))
 		closeButton = wx.Button(self, label = 'Done', size = (55, wx.DefaultSize[1]))
 		measureButton.SetDefault() ## doesn't do much at the moment because the dialog loses focus when clicking in Praat
 
@@ -807,7 +820,7 @@ class PraatLogDialog(wx.Dialog):
 	def OnMeasure(self, e):
 		## calls log 1 in praat and shows the new vowel on the plot
 		try:
-			subprocess.check_output([SENDPRAAT, 'praat', 'editor: "LongSound '+self.wavName+'" ', 'Log 1'])
+			print subprocess.check_output(['./sendpraat', 'praat', 'editor: "LongSound '+self.wavName+'" ', 'Log 1'])
 		except:
 			self.parent.logDialog = None
 			self.Destroy()	
@@ -817,7 +830,7 @@ class PraatLogDialog(wx.Dialog):
 	def OnClose(self, e):
 		## closes the panel and the praat editor and prompts the user to return to the plot panel
 		try:
-			subprocess.check_output([SENDPRAAT, 'praat', 'removeObject: "LongSound '+self.wavName+'"'])
+			subprocess.check_output(['./sendpraat', 'praat', 'removeObject: "LongSound '+self.wavName+'"'])
 		except:
 			pass
 		self.parent.CheckRemainingPraatMeasurements()
@@ -921,26 +934,6 @@ class DisambigDialog(wx.Dialog):
 		## the increase should be double the constant at the end of the x,y calculations above
 		self.SetSize((size[0]+60, size[1]+60))
 
-class ScrolledMessageDialog(wx.Dialog):
-    def __init__(self, parent, message):
-        wx.Dialog.__init__(self, parent)
-        
-        text = wx.TextCtrl(self, -1, message, size=(320,240), style=wx.TE_MULTILINE | wx.TE_READONLY)
-        
-        sizer = wx.BoxSizer(wx.VERTICAL )
-        
-        btnsizer = wx.BoxSizer()
-
-        btn = wx.Button(self, wx.ID_OK)
-        btnsizer.Add(btn, 0, wx.ALL, 5)
-        btnsizer.Add((5,-1), 0, wx.ALL, 5)
-
-        btn = wx.Button(self, wx.ID_CANCEL)
-        btnsizer.Add(btn, 0, wx.ALL, 5)
-
-        sizer.Add(text, 0, wx.EXPAND|wx.ALL, 5)    
-        sizer.Add(btnsizer, 0, wx.EXPAND|wx.ALIGN_CENTER_VERTICAL|wx.ALL, 5)    
-        self.SetSizerAndFit(sizer)
 
 class PlotPanel(wx.Panel):
 	## panel containing all plotted vowels
@@ -1142,8 +1135,8 @@ class PlotPanel(wx.Panel):
 
 	def BuildVowelBitmaps(self):
 		## creates vowel bitmaps from icon files on startup 
-		self.bitmapDict = {basename(dirname(i)): wx.Bitmap(i) for i in glob.glob(join('icons','plot_buttons','*','circle.png'))}
-		self.bitmapDict.update({'alt' : wx.Bitmap(join('icons','plot_buttons','alternate.png')), 'org' : wx.Bitmap(join('icons','plot_buttons','original.png'))})
+		self.bitmapDict = {basename(dirname(i)): wx.Bitmap(i) for i in glob.glob('icons/plot_buttons/*/circle.png')}
+		self.bitmapDict.update({'alt' : wx.Bitmap('icons/plot_buttons/alternate.png'), 'org' : wx.Bitmap('icons/plot_buttons/original.png')})
 	
 	def GetPreloadedBitmap(self, key):
 		## gets the bitmap loaded on startup for a given vowel
@@ -1416,6 +1409,10 @@ class PlotPanel(wx.Panel):
 
 	def CreateVowelsFromFiles(self, files):
 		## creates vowels from file pairs (wav,txt OR csv)
+		## start progress bar
+		progress = 0
+		progressBar = wx.ProgressDialog("Loading Files...", "", len(files), style=wx.PD_CAN_ABORT | wx.PD_ELAPSED_TIME | wx.PD_REMAINING_TIME)
+		progressBar.SetSize((700,300))
 		## get config file settings from the mainframe in order to read the files
 		configDict = self.GetTopLevelParent().configDict
 		delimiter = self.GetTopLevelParent().fileDelim
@@ -1425,20 +1422,11 @@ class PlotPanel(wx.Panel):
 		# initiate sort lists
 		cmus = {}
 		others = {}
-		bad_files = []
-		good_files = []
 		## interate through file pairs
 		for wavFile , infoFile in files:
-			bad = 0
-			if not isfile(wavFile):
-				bad_files.append(wavFile)
-				bad = 1
-			if not isfile(infoFile):
-				bad_files.append(infoFile)
-				bad = 1
-			if bad: 
-				continue
-			good_files.append((wavFile, infoFile))
+			## update progress bar
+			progressBar.Update(progress, infoFile)
+			progress += 1
 			with open(infoFile, 'r') as info: #read file
 				for n,i in enumerate(info): # iterate through lines
 					if n < headingRow: # do nothing for lines above heading row
@@ -1484,15 +1472,12 @@ class PlotPanel(wx.Panel):
 		## display warning message if a line wasn't processed
 		if errorDict:
 			message = 'Unable to parse the following vowel instances\n'+'\n'.join(['In file '+str(k)+': rows '+', '.join([str(v) for v in values]) for k,values in errorDict.items()])+'\n\nPlease check the files or reconfigure the info reader\n(File > Configure Info Reader)'
-			ScrolledMessageDialog(self, message).ShowModal()
-		if bad_files:
-			message = 'Unable to access the following files:\n'+'\n'.join(bad_files)
-			ScrolledMessageDialog(self, message).ShowModal()
+			wx.MessageDialog(self, message).ShowModal()
 		# show vowels on the plot
 		self.CalculateFormantMaxMins() 
 		self.PlaceVowels()
 		self.OnUnionButtonPress() ## shows vowels on the plot if buttons have already been pressed
-		return good_files
+		progressBar.Destroy() # close progress bar
 
 	def RemoveStoredVowelValues(self, vowel, f1, f2, word, duration, cmu, other, position):
 		## removes information about vowels from the appropriate dicts and sets
@@ -1640,8 +1625,7 @@ class PlotPanel(wx.Panel):
 			self.PlaceVowels()
 		else:
 			alt.PlaceBitmap()
-		try: os.remove('praatLog')
-		except: pass
+		subprocess.call(['rm', 'praatLog'])
 		self.Refresh()
 
 	def CheckRemainingPraatMeasurements(self):
@@ -1682,9 +1666,6 @@ class PhonPanel(wx.Panel):
 		self.otherMainButtonSizer = wx.BoxSizer(wx.HORIZONTAL)
 		self.filterPanel = FilterPanel(self) 
 		self.parent = parent
-		font = self.GetFont()
-		font.SetPointSize(12)
-		self.SetFont(font)
 
 		## add stuff to phonSizer
 		sizer.AddStretchSpacer(1)
@@ -1717,7 +1698,7 @@ class PhonPanel(wx.Panel):
 		for i,col in enumerate(cmu):
 			for j,c in enumerate(col):
 				if not c: continue
-				button = PhonButton(self,c)
+				button = CmuButton(self,c)
 				cmuGridSizer.Add(button, (j,i))
 				mainCmuButton.AddMinion(button)
 				self.parent.plotPanel.cmus[c] = set()
@@ -1727,7 +1708,7 @@ class PhonPanel(wx.Panel):
 			for j,c in enumerate(col):
 				if not c or c == '-': continue
 				c = c.decode('utf8')
-				button = PhonButton(self,c, other = True)
+				button = OtherButton(self,c)
 				self.otherGridSizer.Add(button, (i,j))
 				mainOtherButton.AddMinion(button)
 				self.parent.plotPanel.others[c] = set()
@@ -1745,7 +1726,7 @@ class PhonPanel(wx.Panel):
 			for j,c in enumerate(col):
 				if not c or c == '-': continue
 				c = c.decode('utf8')
-				button = PhonButton(self,c)
+				button = OtherButton(self,c)
 				self.otherGridSizer.Add(button, (i,j))
 				mainOtherButton.AddMinion(button)
 				otherDict[c] = set()
@@ -1766,8 +1747,8 @@ class PlayButton(wx.Panel):
 		## define sizers and controls
 		sizer = wx.BoxSizer(wx.VERTICAL)
 		text = wx.StaticText(self, label = "\nPLAY", style = wx.ALIGN_CENTER)
-		self.playBitmap = wx.Bitmap(join('icons','control_buttons','play.png'))
-		self.pauseBitmap = wx.Bitmap(join('icons','control_buttons','pause_on.png'))
+		self.playBitmap = wx.Bitmap('icons/control_buttons/play.png')
+		self.pauseBitmap = wx.Bitmap('icons/control_buttons/pause_on.png')
 		self.button = wx.BitmapButton(self, bitmap = self.playBitmap, size = (55,55))
 		sizer.Add(text, flag = wx.EXPAND)
 		sizer.Add(self.button)
@@ -1801,8 +1782,8 @@ class StdDevButtons(wx.Panel):
 		buttonSizer = wx.BoxSizer(wx.HORIZONTAL)
 		radioButtonSizer = wx.BoxSizer(wx.VERTICAL)
 		text = wx.StaticText(self, label = "STANDARD\n DEVIATION", style = wx.ALIGN_CENTER)
-		self.onBitmap = wx.Bitmap(join('icons','control_buttons','circles_on.png'))
-		self.offBitmap = wx.Bitmap(join('icons','control_buttons','circles.png'))
+		self.onBitmap = wx.Bitmap('icons/control_buttons/circles_on.png')
+		self.offBitmap = wx.Bitmap('icons/control_buttons/circles.png')
 		self.button = wx.BitmapButton(self, bitmap = self.offBitmap, size = (55,55))
 		self.oneButton = wx.RadioButton(self, label = '1')
 		self.twoButton = wx.RadioButton(self, label = '2')
@@ -1867,9 +1848,9 @@ class ZoomButton(wx.Panel):
 		## define sizers and controls
 		sizer = wx.BoxSizer(wx.VERTICAL)
 		text = wx.StaticText(self, label = "\nZOOM", style = wx.ALIGN_CENTER)
-		self.zoomBM = wx.Bitmap(join('icons','control_buttons','zoomin.png'))
-		self.zoomoutBM = wx.Bitmap(join('icons','control_buttons','zoomout.png'))
-		self.zoomingBM = wx.Bitmap(join('icons','control_buttons','zooming.png'))
+		self.zoomBM = wx.Bitmap('icons/control_buttons/zoomin.png')
+		self.zoomoutBM = wx.Bitmap('icons/control_buttons/zoomout.png')
+		self.zoomingBM = wx.Bitmap('icons/control_buttons/zooming.png')
 		self.button = wx.BitmapButton(self, bitmap = self.zoomBM, size = (55,55))
 		## layout the controls
 		sizer.Add(text, flag = wx.EXPAND)
@@ -1932,8 +1913,8 @@ class CancelButton(wx.Panel):
 		## define sizer and controls
 		sizer = wx.BoxSizer(wx.VERTICAL)
 		text = wx.StaticText(self, label = "\nCANCEL", style = wx.ALIGN_CENTER)
-		self.button = wx.BitmapButton(self, bitmap = wx.Bitmap(join('icons','control_buttons','cancel.png')), size = (55,55))
-		self.button.SetBitmapDisabled( wx.Bitmap(join('icons','control_buttons','cancel_off.png')))
+		self.button = wx.BitmapButton(self, bitmap = wx.Bitmap('icons/control_buttons/cancel.png'), size = (55,55))
+		self.button.SetBitmapDisabled( wx.Bitmap('icons/control_buttons/cancel_off.png'))
 		self.button.Disable()
 		## layout controls
 		sizer.Add(text, flag = wx.EXPAND)
@@ -2018,8 +1999,8 @@ class SaveButton(wx.Panel):
 		## define sizer and controls
 		sizer = wx.BoxSizer(wx.VERTICAL)
 		text = wx.StaticText(self, label = "\nSAVE", style = wx.ALIGN_CENTER)
-		self.button = wx.BitmapButton(self, bitmap = wx.Bitmap(join('icons','control_buttons','save.png')), size = (55,55))
-		self.button.SetBitmapDisabled(wx.Bitmap(join('icons','control_buttons','save_off.png')))
+		self.button = wx.BitmapButton(self, bitmap = wx.Bitmap('icons/control_buttons/save.png'), size = (55,55))
+		self.button.SetBitmapDisabled(wx.Bitmap('icons/control_buttons/save_off.png'))
 		self.button.Disable()
 		## layout controls
 		sizer.Add(text, flag = wx.EXPAND)
@@ -2081,12 +2062,12 @@ class UndoRedoButtons(wx.Panel):
 		## define sizer and controls
 		sizer = wx.BoxSizer(wx.HORIZONTAL)
 		undoText = wx.StaticText(self, label = "\nUNDO", style = wx.ALIGN_CENTER)
-		self.undoButton = wx.BitmapButton(self, bitmap = wx.Bitmap(join('icons','control_buttons','undo.png')), size = (55,55))
-		self.undoButton.SetBitmapDisabled(wx.Bitmap(join('icons','control_buttons','undo_off.png')))
+		self.undoButton = wx.BitmapButton(self, bitmap = wx.Bitmap('icons/control_buttons/undo.png'), size = (55,55))
+		self.undoButton.SetBitmapDisabled(wx.Bitmap('icons/control_buttons/undo_off.png'))
 		self.undoButton.Disable()
 		redoText = wx.StaticText(self, label = "\nREDO", style = wx.ALIGN_CENTER)
-		self.redoButton = wx.BitmapButton(self, bitmap = wx.Bitmap(join('icons','control_buttons','redo.png')), size = (55,55))
-		self.redoButton.SetBitmapDisabled(wx.Bitmap(join('icons','control_buttons','redo_off.png')))
+		self.redoButton = wx.BitmapButton(self, bitmap = wx.Bitmap('icons/control_buttons/redo.png'), size = (55,55))
+		self.redoButton.SetBitmapDisabled(wx.Bitmap('icons/control_buttons/redo_off.png'))
 		self.redoButton.Disable()
 		undoSizer = wx.BoxSizer(wx.VERTICAL)
 		redoSizer = wx.BoxSizer(wx.VERTICAL)
@@ -2169,10 +2150,10 @@ class RemoveButton(wx.Panel):
 		self.parent = parent
 		sizer = wx.BoxSizer(wx.VERTICAL)
 		text = wx.StaticText(self, label = "REMOVE\n FROM PLOT", style = wx.ALIGN_CENTER)
-		self.onBitmap = wx.Bitmap(join('icons','control_buttons','remove_on.png'))
-		self.offBitmap = wx.Bitmap(join('icons','control_buttons','remove.png'))
+		self.onBitmap = wx.Bitmap('icons/control_buttons/remove_on.png')
+		self.offBitmap = wx.Bitmap('icons/control_buttons/remove.png')
 		self.button = wx.BitmapButton(self, bitmap = self.offBitmap, size = (55,45))
-		self.optionButton = wx.BitmapButton(self, bitmap = wx.Bitmap(join('icons','control_buttons','dropdown.png')), size = (55,20))
+		self.optionButton = wx.BitmapButton(self, bitmap = wx.Bitmap('icons/control_buttons/dropdown.png'), size = (55,20))
 		self.removeMode = False
 		## layout controls
 		sizer.Add(text, flag = wx.EXPAND)
@@ -2476,7 +2457,6 @@ class SingleChoiceDialogImproved(wx.SingleChoiceDialog):
 
 	def GetStringSelection(self):
 		return self.listbox.GetString(self.listbox.GetSelection())
-
 
 class ConfigInputDialog(wx.Dialog):
 	## dialog that lets the user change how the input files are read
@@ -2998,7 +2978,6 @@ class mainFrame(wx.Frame):
 		with open('recent_files.txt') as rfiles:
 			for line in rfiles:
 				if line[0] == '#':
-					print line
 					return line[1:].strip()
 					break
 
@@ -3073,15 +3052,15 @@ class mainFrame(wx.Frame):
 
 	def OnFindPraat(self, e):
 		## lets user change the path to Praat
-		praatDialog = wx.FileDialog(self, message = 'Find location of Praat', style = wx.FD_OPEN)
+		praatDialog = wx.FileDialog(self, message = 'Find location of Praat', style = wx.FD_OPEN, wildcard = ".app")
 		if praatDialog.ShowModal() == wx.ID_OK:
 			self.Praat = praatDialog.GetPath()
 			# save self.praat in recent_files savefile
 			lines = ['#'+self.Praat+'\n']
 			with open('recent_files.txt') as rfiles:
 				for line in rfiles:
-					if line[0] != '#':
-						lines.append(line)
+					if line[0] == '#': continue
+					lines.append(line)
 			with open('recent_files.txt','w') as rfiles:
 				for l in lines:
 					rfiles.write(l)
@@ -3101,10 +3080,9 @@ class mainFrame(wx.Frame):
 		self.saveDir = dirname(infoFiles[0])
 		self.infoDir = dirname(infoFiles[0])
 		newFiles = [(w,i) for w,i in self.GetFiles(wavFiles, infoFiles) if (w,i) not in self.openFiles]
-		newFiles = self.plotPanel.CreateVowelsFromFiles(newFiles)
 		self.openFiles = newFiles+self.openFiles
-		# relog here incase some of the old recently loaded files are bad 
-		self.LogRecentlyOpenedFiles()
+		self.plotPanel.CreateVowelsFromFiles(newFiles)		
+
 
 	def OnOpen(self, e):
 		## open wav and .csv/.txt files to read vowels from
@@ -3119,15 +3097,13 @@ class mainFrame(wx.Frame):
 				self.saveDir = dirname(infoFiles[0])
 				self.infoDir = dirname(infoFiles[0])
 				newFiles = [(w,i) for w,i in self.GetFiles(wavFiles, infoFiles) if (w,i) not in self.openFiles]
-				newFiles = self.plotPanel.CreateVowelsFromFiles(newFiles)
 				self.openFiles = newFiles+self.openFiles
 				self.LogRecentlyOpenedFiles()
+				self.plotPanel.CreateVowelsFromFiles(newFiles)
 
 	def LogRecentlyOpenedFiles(self):
 		## write recently opened files (paths) to recent_files.txt 
 		with open('recent_files.txt', 'w') as recentF:
-			if self.Praat:
-				recentF.write('#'+self.Praat+'\n')
 			for wavFile, infoFile in self.openFiles:
 				recentF.write(wavFile+'\t'+infoFile+'\n')
 

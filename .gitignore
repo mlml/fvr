@@ -10,3 +10,5 @@
 iconMaker.py
 FVR_old.py
 setup.py
+test_data/
+FVR_OSX_only.py	
