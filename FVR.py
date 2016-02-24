@@ -301,7 +301,6 @@ class VowelButton():
 				else:
 					self.parent.PlaceVowels(altsOnly = True)
 
-
 	def ReadPraatAlternates(self):
 		## Reads the new vowel values remeasured in Praat
 		## called in order to display the alternate vowels from Praat
@@ -325,7 +324,6 @@ class VowelButton():
 			## this needs to be shown before opening praat or it will not remain on top of everything
 			self.parent.logDialog = PraatLogDialog(self.parent, self.wav)
 			## open praat and editor to the correct location
-			print self.parent.GetTopLevelParent().Praat
 			if OPEN:
 				subprocess.check_output([OPEN, self.parent.GetTopLevelParent().Praat])
 			else:
@@ -1140,11 +1138,24 @@ class PlotPanel(wx.Panel):
 			horLines = [(0,i, width+20, i) for i in range(topBound, height, yOffset)]
 			self.gridlines = vertLines + horLines
 
+	def makeDot(self, shape, colour):
+		bm = wx.EmptyBitmapRGBA(12,12,alpha=0)
+		dc = wx.MemoryDC(bm)
+		dc = wx.GCDC(dc)
+		dc.SetBrush(wx.Brush(colour, wx.SOLID))
+		dc.SetPen(wx.Pen('Black', 1))
+		if shape == 'square':
+			dc.DrawRectangle(1,1,10,10)
+		else:
+			dc.DrawCircle(6,6,5)
+		return bm
+
 	def BuildVowelBitmaps(self):
 		## creates vowel bitmaps from icon files on startup 
-		self.bitmapDict = {basename(dirname(i)): wx.Bitmap(i) for i in glob.glob(join('icons','plot_buttons','*','circle.png'))}
-		self.bitmapDict.update({'alt' : wx.Bitmap(join('icons','plot_buttons','alternate.png')), 'org' : wx.Bitmap(join('icons','plot_buttons','original.png'))})
-	
+		# self.bitmapDict = {basename(dirname(i)): wx.Bitmap(i) for i in glob.glob(join('icons','plot_buttons','*','circle.png'))}
+		# self.bitmapDict.update({'alt' : wx.Bitmap(join('icons','plot_buttons','alternate.png')), 'org' : wx.Bitmap(join('icons','plot_buttons','original.png'))})
+		self.bitmapDict = {name : self.makeDot('circle', colour) for name, colour in colourDict.items()}
+		self.bitmapDict.update({'alt' : self.makeDot('square', 'white') , 'org' : self.makeDot('square', 'black')})
 	def GetPreloadedBitmap(self, key):
 		## gets the bitmap loaded on startup for a given vowel
 		## key = cmuType or otherType (ex: 'AH', 'i', etc.)
@@ -2998,7 +3009,6 @@ class mainFrame(wx.Frame):
 		with open('recent_files.txt') as rfiles:
 			for line in rfiles:
 				if line[0] == '#':
-					print line
 					return line[1:].strip()
 					break
 
