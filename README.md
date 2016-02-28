@@ -30,17 +30,15 @@ Plotmish is inspired by [Plotnik](http://www.ling.upenn.edu/~wlabov/Plotnik.html
 
 [Python](https://www.python.org/download/releases/2.7) (preferably version 2.7)
 
-[wxPython](http://www.wxpython.org/download.php) (for best results use [version 3.0 for cocoa](http://downloads.sourceforge.net/wxpython/wxPython3.0-osx-3.0.2.0-cocoa-py2.7.dmg))
+[wxPython](http://www.wxpython.org/download.php)
 
 [Praat](http://www.fon.hum.uva.nl/praat/) 
 
 [numpy](http://www.numpy.org/)
 
-Currently for OSX only 
-
 # **Getting started**
 
-###On the command line:
+###On the command line or terminal:
 
     cd to FVR/
 	python FVR.py
@@ -125,12 +123,6 @@ The toolbar buttons are located at the top of the main FVR window:
 
 * Show or hide an ellipse which shows 1,2 or 3 standard deviations from the mean for all vowels on the plot
 
-**ZOOM**
-	
-* Clicking the zoom (+) will allow you to zoom into an area on the plot either by double clicking or drawing a box (describing the area to zoom into)
-* Cancel the zoom by clicking the button again 
-* If the button is showing (-) the plot will zoom out to its full dimensions
-
 **REMEASURE USING**
 	
 * Set the type of remeasurement you want to do (see Remeasuring above)
@@ -163,6 +155,8 @@ The toolbar buttons are located at the top of the main FVR window:
 ###Other Things
 
 * Right click a vowel on the plot to display information about it
+
+* Clicking on overlapping vowels will pop out a zoomed in portion of the plot so you can choose which of the overlapping vowels you actually meant to click
 
 * The CMU phonetic alphabet at the bottom of the panel is permanent but you can select a new alternate phonetic alphabet with `View > Change Alternate Phonetic Alphabet`
 
