@@ -453,13 +453,17 @@ class RemoveFromPlotOptions(wx.Frame):
 		## returns info from dialog (used like GetValue())
 		return (self.goodButton.GetValue(), self.noteOption.GetValue())
 
-class FilterPanel(wx.Panel):
-	## panel containing controls to filter vowels from the plot
+class FilterOptions(wx.Frame):
+	## popup window that gives options when removing vowels from the plot
 	def __init__(self, parent):
-		wx.Panel.__init__(self, parent)
+		wx.Frame.__init__(self, parent, style = wx.FRAME_FLOAT_ON_PARENT)
+		self.parent = parent
 		## define sizers
+		
 		sizer = wx.BoxSizer(wx.VERTICAL)
-		lowerSizer = wx.BoxSizer(wx.HORIZONTAL)
+		wordSizer = wx.BoxSizer(wx.VERTICAL)
+		horSizer = wx.BoxSizer(wx.HORIZONTAL)
+		rightSizer = wx.BoxSizer(wx.VERTICAL)
 		stressSizer = wx.BoxSizer(wx.VERTICAL)
 		minMaxSizer = wx.BoxSizer(wx.VERTICAL)
 		minSizer = wx.BoxSizer(wx.HORIZONTAL)
@@ -468,16 +472,18 @@ class FilterPanel(wx.Panel):
 		## define title and main button
 		self.filterBit = wx.Bitmap(join('icons','control_buttons','filter.png'))
 		self.cancelBit = wx.Bitmap(join('icons','control_buttons','filter_on.png'))
-		self.button = wx.BitmapButton(self, bitmap = self.filterBit, size = (55,55))
-		titleText = wx.StaticText(self, label = "FILTER", style = wx.ALIGN_CENTER)
+		#self.button = wx.BitmapButton(self, bitmap = self.filterBit, size = (55,55))
+		#titleText = wx.StaticText(self, label = "FILTER", style = wx.ALIGN_CENTER)
 		## define list of words in the plot
 		self.words = []
+		self.checked_words = []
 		wordText = wx.StaticText(self, label = "By word...", style = wx.ALIGN_LEFT)
-		self.wordBox = wx.ComboBox(self, value = ' ',  choices = self.words, style = wx.CB_DROPDOWN|wx.TE_PROCESS_ENTER, size = (200, wx.DefaultSize[1]))
-		self.wordBox.SetValue('') ## hack to make sure default value is empty but curser starts in left-most position
+		#self.wordBox = wx.ComboBox(self, value = ' ',  choices = self.words, style = wx.CB_DROPDOWN|wx.TE_PROCESS_ENTER, size = (200, wx.DefaultSize[1]))
+		self.wordBox = wx.CheckListBox(self, choices = self.words, size = (200,200))
+		#self.wordBox.SetValue('') ## hack to make sure default value is empty but curser starts in left-most position
 		## define min and max duration input boxes
 		durText = wx.StaticText(self, label = "By duration...", style = wx.ALIGN_LEFT)
-		minText = wx.StaticText(self, label = "min:", style = wx.ALIGN_LEFT)
+		minText = wx.StaticText(self, label = "min: ", style = wx.ALIGN_LEFT)
 		maxText = wx.StaticText(self, label = "max:", style = wx.ALIGN_LEFT)
 		self.minDurBox = wx.TextCtrl(self, value = '', style = wx.TE_PROCESS_ENTER|wx.TE_RICH, size = (40, wx.DefaultSize[1])) 
 		self.maxDurBox = wx.TextCtrl(self, value = '', style = wx.TE_PROCESS_ENTER|wx.TE_RICH, size = (40, wx.DefaultSize[1])) 
@@ -491,36 +497,42 @@ class FilterPanel(wx.Panel):
 		self.stress0.SetValue(True)
 
 		## arrange controls in sizer
-		sizer.AddSpacer(7)
-		sizer.Add(titleText, flag = wx.ALIGN_CENTER)
-		sizer.Add(self.button, flag = wx.ALIGN_CENTER)
-		sizer.Add(wordText)
-		sizer.Add(self.wordBox)
-		sizer.Add(lowerSizer)
-		lowerSizer.Add(minMaxSizer)
-		lowerSizer.AddSpacer(10)
-		lowerSizer.Add(stressSizer)
+		sizer.AddSpacer(20)
+		# sizer.Add(titleText, flag = wx.ALIGN_CENTER)
+		# sizer.Add(self.button, flag = wx.ALIGN_CENTER)
+		sizer.Add(horSizer)
+		sizer.AddSpacer(20)
+		horSizer.AddSpacer(20)
+		horSizer.Add(wordSizer)
+		horSizer.AddSpacer(10)
+		horSizer.Add(rightSizer)
+		horSizer.AddSpacer(20)
+		wordSizer.Add(wordText)
+		wordSizer.Add(self.wordBox)
+		rightSizer.Add(minMaxSizer)
+		rightSizer.AddSpacer(10)
+		rightSizer.Add(stressSizer)
 		minMaxSizer.Add(durText)
 		minMaxSizer.Add(minSizer)
 		minMaxSizer.Add(maxSizer)
 		minSizer.Add(minText)
-		minSizer.AddSpacer(3)
-		minSizer.Add(self.minDurBox, flag = wx.ALIGN_RIGHT)
+		# minSizer.AddSpacer(3)
+		minSizer.Add(self.minDurBox)
 		minSizer.Add(wx.StaticText(self, label = 'ms'))
 		maxSizer.Add(maxText)
-		maxSizer.Add(self.maxDurBox, flag = wx.ALIGN_RIGHT)
+		maxSizer.Add(self.maxDurBox)
 		maxSizer.Add(wx.StaticText(self, label = 'ms'))
 		stressSizer.Add(stressText)
 		stressSizer.Add(self.stress1)
 		stressSizer.Add(self.stress2)
 		stressSizer.Add(self.stress0)
 		## display the panel
-		self.SetSizer(sizer)
+		self.SetSizerAndFit(sizer)
 		self.Show(True)
 		## bind events to class functions
-		self.button.Bind(wx.EVT_BUTTON, self.OnPress)
-		self.wordBox.Bind(wx.EVT_TEXT_ENTER, self.OnEnter)
-		self.wordBox.Bind(wx.EVT_COMBOBOX, self.OnWordSelect)
+		#self.button.Bind(wx.EVT_BUTTON, self.OnPress)
+		#self.wordBox.Bind(wx.EVT_TEXT_ENTER, self.OnEnter)
+		self.wordBox.Bind(wx.EVT_CHECKLISTBOX, self.OnWordSelect)
 		self.minDurBox.Bind(wx.EVT_KILL_FOCUS, self.OnMin)
 		self.maxDurBox.Bind(wx.EVT_KILL_FOCUS, self.OnMax)
 		self.minDurBox.Bind(wx.EVT_TEXT_ENTER, self.OnMin)
@@ -529,11 +541,11 @@ class FilterPanel(wx.Panel):
 		self.stress1.Bind(wx.EVT_CHECKBOX, self.OnCheck)
 		self.stress2.Bind(wx.EVT_CHECKBOX, self.OnCheck)
 		self.stress0.Bind(wx.EVT_CHECKBOX, self.OnCheck)
+		self.Bind(wx.EVT_ACTIVATE, self.OnClose)
 
 	def OnCheck(self, e):
-		if self.button.GetBitmapLabel() == self.cancelBit:
-			self.OnPress(enter = True)
-
+		if self.parent.button.GetBitmapLabel() == self.cancelBit:
+			self.parent.OnFilter(enter = True)
 
 	def showVowelStats(self):
 		## define list of words in the plot
@@ -544,46 +556,46 @@ class FilterPanel(wx.Panel):
 		self.maxDurBox.SetValue(self.GetTotalMaxDur())
 		self.Refresh()
 
-	def OnPress(self, e = None, enter = False):
-		## call plotpanel.filterVowels() when button or return key is pressed 
-		plotpanel = self.GetTopLevelParent().plotPanel
-		if self.button.GetBitmapLabel() == self.filterBit or enter:
-			## get the word selection
-			word = self.wordBox.GetValue()
-			## get which stress buttons are on
-			stress = [['unstressed','primary','secondary'].index(s.GetLabel()) for s in [self.stress1, self.stress2, self.stress0] if s.GetValue()]
-			## filter the vowels on the plot
-			minDur = int(self.minDurBox.GetValue())
-			maxDur = int(self.maxDurBox.GetValue())
-			if minDur >= maxDur: ## only filters by word if the duration limits are weird
-				self.minDurBox.SetBackgroundColour('red')
-				self.maxDurBox.SetBackgroundColour('red')
-				## reset mindur/maxdur to the plot min/max
-				minDur = self.GetTotalMinDur()
-				maxDur = self.GetTotalMaxDur()
-			self.button.SetBitmapLabel(self.cancelBit)
-		else: ## undo filtering
-			minDur = self.GetTotalMinDur()
-			maxDur = self.GetTotalMaxDur()
-			stress = [0,1,2]
-			word = '.*'
-			self.button.SetBitmapLabel(self.filterBit)
-		plotpanel.filterVowels(word = word, minDur = minDur, maxDur = maxDur, stress = stress)
+	# def OnPress(self, e = None):
+	# 	## call plotpanel.filterVowels() when button or return key is pressed 
+	# 	plotpanel = self.parent.GetTopLevelParent().plotPanel
+	# 	if self.parent.button.GetBitmapLabel() == self.filterBit:
+	# 		## get the word selection
+	# 		words = self.wordBox.GetCheckedStrings()
+	# 		## get which stress buttons are on
+	# 		stress = [['unstressed','primary','secondary'].index(s.GetLabel()) for s in [self.stress1, self.stress2, self.stress0] if s.GetValue()]
+	# 		## filter the vowels on the plot
+	# 		minDur = int(self.minDurBox.GetValue())
+	# 		maxDur = int(self.maxDurBox.GetValue())
+	# 		if minDur >= maxDur: ## only filters by word if the duration limits are weird
+	# 			self.minDurBox.SetBackgroundColour('red')
+	# 			self.maxDurBox.SetBackgroundColour('red')
+	# 			## reset mindur/maxdur to the plot min/max
+	# 			minDur = self.GetTotalMinDur()
+	# 			maxDur = self.GetTotalMaxDur()
+	# 		self.parent.button.SetBitmapLabel(self.cancelBit)
+	# 	else: ## undo filtering
+	# 		minDur = self.GetTotalMinDur()
+	# 		maxDur = self.GetTotalMaxDur()
+	# 		stress = [0,1,2]
+	# 		words = '.*'
+	# 		self.parent.button.SetBitmapLabel(self.filterBit)
+	# 	plotpanel.filterVowels(words = words, minDur = minDur, maxDur = maxDur, stress = stress)
 
-		self.Layout()
+	# 	self.Layout()
 
 
-	def OnEnter(self, e):
-		## returns word value to default if the typed word isn't found in the plot
-		if self.wordBox.GetValue().upper() not in self.words:
-			self.wordBox.SetValue('')
-		else:
-			self.OnPress(enter = True)
+	# def OnEnter(self, e):
+	# 	## returns word value to default if the typed word isn't found in the plot
+	# 	if self.wordBox.GetValue().upper() not in self.words:
+	# 		self.wordBox.SetValue('')
+	# 	else:
+	# 		self.OnPress(enter = True)
 
 	def OnWordSelect(self, e):
 		## calls OnPress if a word in the popup list is selected
-		self.wordBox.Dismiss() 
-		self.OnPress(enter = True)
+		self.checked_words = self.wordBox.GetCheckedStrings()
+		self.parent.OnFilter(enter=True)
 
 	def OnMin(self, e):
 		## only integers allowed in minBox, also processes return key 
@@ -598,7 +610,7 @@ class FilterPanel(wx.Panel):
 			return 
 		# if enter is pressed: filter vowels
 		if isinstance(e, wx.CommandEvent):
-			self.OnPress(enter = True)
+			self.parent.OnFilter(enter = True)
 
 	def OnMax(self, e):
 		## only integers allowed in maxBox, also processes return key
@@ -613,27 +625,33 @@ class FilterPanel(wx.Panel):
 			return 
 		# if enter is pressed: filter vowels
 		if isinstance(e, wx.CommandEvent):
-			self.OnPress(enter = True)
+			self.parent.OnFilter(enter = True)
+
+	def OnClose(self, e):
+		# hides the frame if it loses focus
+		# and reset checked words when gains focus
+		if not e.GetActive():
+			self.Hide()
+		else:
+			self.wordBox.SetCheckedStrings(self.checked_words)
 
 	def GetTotalMinDur(self):
 		## get min duration from all vowels on the plot
 		try:
-			return str(int(min(self.GetTopLevelParent().plotPanel.durations)*1000))
+			return str(int(min(self.parent.GetTopLevelParent().plotPanel.durations)*1000))
 		except:
 			return None
 
 	def GetTotalMaxDur(self):
 		## get max duration from all vowels on the plot
 		try:
-			return str(int(max(self.GetTopLevelParent().plotPanel.durations)*1000))
+			return str(int(max(self.parent.GetTopLevelParent().plotPanel.durations)*1000))
 		except:
 			return None
 
 	def FindWords(self):
 		## get list of all words from vowels on the plot
-		return ['']+sorted(list(self.GetTopLevelParent().plotPanel.words))
-
-
+		return sorted(list(self.parent.GetTopLevelParent().plotPanel.words))
 
 class PhonButton(wx.Button):
 	## button subclass representing all cmu vowels
@@ -1013,7 +1031,7 @@ class PlotPanel(wx.Panel):
 		dc.DrawLineList(self.gridlines, pens =  wx.Pen('Grey', 1))
 		for b in self.visibleVowels:
 			if self.filtering:
-				if not re.match(self.filtering['word'], b.word.upper()): continue
+				if b.word.upper() not in self.filtering['words']: continue
 				if not self.filtering['durs'][0] <= int(b.duration*1000) <= self.filtering['durs'][1]: continue
 				if b.stress not in self.filtering['stress']: 
 					continue
@@ -1077,7 +1095,7 @@ class PlotPanel(wx.Panel):
 				return inRange[0]
 		else:
 			if self.filtering:
-				inRange = [v for v in vowels if v in self.visibleVowels and re.match(self.filtering['word'], v.word.upper()) and self.filtering['durs'][0] <= int(v.duration*1000) <= self.filtering['durs'][1] and v.stress in self.filtering['stress']]
+				inRange = [v for v in vowels if v in self.visibleVowels and v.word.upper() in self.filtering['words'] and self.filtering['durs'][0] <= int(v.duration*1000) <= self.filtering['durs'][1] and v.stress in self.filtering['stress']]
 			else:
 				inRange = [v for v in vowels if v in self.visibleVowels]
 			if len(inRange) > 1:
@@ -1100,9 +1118,9 @@ class PlotPanel(wx.Panel):
 		#returns remeasurement permission
 		return bool(self.allowRemeasurements)
 
-	def filterVowels(self, word = None, minDur = None, maxDur = None, stress = []):
+	def filterVowels(self, words = None, minDur = None, maxDur = None, stress = []):
 		## filter all vowels from the plot by word or duration range
-		self.filtering = {'word':word, 'durs':[int(minDur), int(maxDur)], 'stress':stress}
+		self.filtering = {'words':words, 'durs':[int(minDur), int(maxDur)], 'stress':stress}
 		self.Refresh()
 
 	def GetAdjustedSize(self):
@@ -1407,7 +1425,7 @@ class PlotPanel(wx.Panel):
 				except:
 					print >> sys.stderr, 'no formants found in vowel:\n\n'+str(b)
 			self.maxmins = (min(allF1), max(allF1), min(allF2), max(allF2))
-		self.GetTopLevelParent().phonPanel.filterPanel.showVowelStats()
+		self.GetTopLevelParent().toolBarPanel.filterButton.dialog.showVowelStats()
 
 
 	def PlaceVowels(self, altsOnly = False):
@@ -1691,7 +1709,6 @@ class PhonPanel(wx.Panel):
 		cmuMainButtonSizer = wx.BoxSizer(wx.HORIZONTAL)
 		self.otherGridSizer = wx.GridBagSizer(1,1)
 		self.otherMainButtonSizer = wx.BoxSizer(wx.HORIZONTAL)
-		self.filterPanel = FilterPanel(self) 
 		self.parent = parent
 		font = self.GetFont()
 		font.SetPointSize(12)
@@ -1705,8 +1722,7 @@ class PhonPanel(wx.Panel):
 		sizer.AddSpacer(10)
 		sizer.Add(self.otherSizer)
 		sizer.AddStretchSpacer(1)
-		sizer.Add(self.filterPanel)
-		sizer.AddStretchSpacer(2)
+		#sizer.AddStretchSpacer(2)
 		
 
 		## add stuff to cmuSizer
@@ -1755,8 +1771,8 @@ class PhonPanel(wx.Panel):
 		for i,col in enumerate(self.parent.other):
 			for j,c in enumerate(col):
 				if not c or c == '-': continue
-				c = c.decode('utf8')
-				button = PhonButton(self,c)
+				c = c.encode('utf8')
+				button = PhonButton(self,c, other = True)
 				self.otherGridSizer.Add(button, (i,j))
 				mainOtherButton.AddMinion(button)
 				otherDict[c] = set()
@@ -2182,7 +2198,7 @@ class RemoveButton(wx.Panel):
 		text = wx.StaticText(self, label = "REMOVE\n FROM PLOT", style = wx.ALIGN_CENTER)
 		self.onBitmap = wx.Bitmap(join('icons','control_buttons','remove_on.png'))
 		self.offBitmap = wx.Bitmap(join('icons','control_buttons','remove.png'))
-		self.button = wx.BitmapButton(self, bitmap = self.offBitmap, size = (55,45))
+		self.button = wx.BitmapButton(self, bitmap = self.offBitmap, size = (55,55))
 		self.optionButton = wx.BitmapButton(self, bitmap = wx.Bitmap(join('icons','control_buttons','dropdown.png')), size = (55,20))
 		self.removeMode = False
 		## layout controls
@@ -2227,29 +2243,96 @@ class RemoveButton(wx.Panel):
 		y += self.optionButton.GetSize()[1]
 		self.dialog.Move(self.ClientToScreen((x,y)))
 
+class FilterButton(wx.Panel):
+	def __init__(self, parent):
+		wx.Panel.__init__(self, parent = parent)
+		## define sizer and controls
+		self.parent = parent
+		sizer = wx.BoxSizer(wx.VERTICAL)
+		text = wx.StaticText(self, label = "\nFILTER", style = wx.ALIGN_CENTER)
+		self.onBitmap = wx.Bitmap(join('icons','control_buttons','filter_on.png'))
+		self.offBitmap = wx.Bitmap(join('icons','control_buttons','filter.png'))
+		self.button = wx.BitmapButton(self, bitmap = self.offBitmap, size = (55,55))
+		self.optionButton = wx.BitmapButton(self, bitmap = wx.Bitmap(join('icons','control_buttons','dropdown.png')), size = (55,20))
+		self.removeMode = False
+		## layout controls
+		sizer.Add(text, flag = wx.EXPAND)
+		sizer.Add(self.button, flag = wx.ALIGN_CENTER)
+		sizer.Add(self.optionButton, flag = wx.ALIGN_CENTER)
+		self.SetSizer(sizer)
+		## set up dialog with note options to add when removing a vowel
+		self.dialog = FilterOptions(self)
+		self.dialog.Hide()
+		## bind button click to function
+		self.button.Bind(wx.EVT_BUTTON, self.OnFilter)
+		self.optionButton.Bind(wx.EVT_BUTTON, self.OnPress)
+		self.GetTopLevelParent().Bind(wx.EVT_MOVE, self.PlaceDialog)
+
+	def OnFilter(self, e = None, enter = False):
+		## call plotpanel.filterVowels() when button or return key is pressed 
+		plotpanel = self.GetTopLevelParent().plotPanel
+		if self.button.GetBitmapLabel() == self.offBitmap or enter:
+			## get the word selection
+			words = self.dialog.wordBox.GetCheckedStrings()
+			## get which stress buttons are on
+			stress = [['unstressed','primary','secondary'].index(s.GetLabel()) for s in [self.dialog.stress1, self.dialog.stress2, self.dialog.stress0] if s.GetValue()]
+			## filter the vowels on the plot
+			minDur = int(self.dialog.minDurBox.GetValue())
+			maxDur = int(self.dialog.maxDurBox.GetValue())
+			if minDur >= maxDur: ## only filters by word if the duration limits are weird
+				self.dialog.minDurBox.SetBackgroundColour('red')
+				self.dialog.maxDurBox.SetBackgroundColour('red')
+				## reset mindur/maxdur to the plot min/max
+				minDur = self.dialog.GetTotalMinDur()
+				maxDur = self.dialog.GetTotalMaxDur()
+			self.button.SetBitmapLabel(self.onBitmap)
+		else: ## undo filtering
+			minDur = self.dialog.GetTotalMinDur()
+			maxDur = self.dialog.GetTotalMaxDur()
+			stress = [0,1,2]
+			words = self.dialog.FindWords()
+			self.button.SetBitmapLabel(self.offBitmap)
+		plotpanel.filterVowels(words = words, minDur = minDur, maxDur = maxDur, stress = stress)
+
+		self.Layout()
+
+	def OnPress(self, e):
+		## initiates a dialog box for adding notes to removed vowels
+		if not self.dialog.IsShown():
+			self.PlaceDialog()
+			self.dialog.Show()
+
+	def PlaceDialog(self, e = None):
+		## when the frame is moved, this makes sure the dialog stays in position
+		x,y = self.optionButton.GetPosition()
+		y += self.optionButton.GetSize()[1]
+		offset = self.dialog.GetSize()[0]-self.button.GetSize()[0]
+		self.dialog.Move(self.ClientToScreen((x-offset,y)))
+
 class ToolBar(wx.Panel):
 	## panel containing toolbar buttons (at top of window)
 	def __init__(self, parent):
-		wx.Panel.__init__(self, parent = parent, style=wx.SUNKEN_BORDER, size = (800,100)) 
+		wx.Panel.__init__(self, parent = parent, style=wx.SUNKEN_BORDER, size = (800,110)) 
 		## define sizer and panels
 		sizer = wx.BoxSizer(wx.HORIZONTAL)
 		self.playButton = PlayButton(self)
 		self.stdDevButtons = StdDevButtons(self)
-		# self.zoomButton = ZoomButton(self) 	# not implemented until bug where zooming happens too 
-												# early on some systems is resolved (issue #14)
+		self.zoomButton = ZoomButton(self) 	
+												
 		self.reMeasureButton = ReMeasureButton(self)
 		self.cancelButton = CancelButton(self)
 		self.saveButton = SaveButton(self)
 		self.undoRedoButtons = UndoRedoButtons(self)
 		self.removeButton = RemoveButton(self)
+		self.filterButton = FilterButton(self)
 		## layout panels
 		sizer.AddStretchSpacer(1)
 		sizer.Add(self.playButton, flag = wx.EXPAND)
 		sizer.AddSpacer(3)
 		sizer.Add(self.stdDevButtons, flag = wx.EXPAND)
 		sizer.AddSpacer(3)
-		# sizer.Add(self.zoomButton, flag = wx.EXPAND)
-		# sizer.AddSpacer(3)
+		sizer.Add(self.zoomButton, flag = wx.EXPAND)
+		sizer.AddSpacer(3)
 		sizer.Add(self.reMeasureButton, flag = wx.EXPAND)
 		sizer.AddSpacer(3)
 		sizer.Add(self.cancelButton, flag = wx.EXPAND)
@@ -2259,6 +2342,8 @@ class ToolBar(wx.Panel):
 		sizer.Add(self.undoRedoButtons, flag = wx.EXPAND)
 		sizer.AddSpacer(3)
 		sizer.Add(self.removeButton, flag = wx.EXPAND)
+		sizer.AddSpacer(3)
+		sizer.Add(self.filterButton, flag = wx.EXPAND)
 		sizer.AddStretchSpacer(1)
 
 		self.SetSizer(sizer)

@@ -123,6 +123,10 @@ The toolbar buttons are located at the top of the main FVR window:
 
 * Show or hide an ellipse which shows 1,2 or 3 standard deviations from the mean for all vowels on the plot
 
+**ZOOM**
+
+* Clicking this button enables zooming mode where you can draw a box defining the area to zoom to.
+
 **REMEASURE USING**
 	
 * Set the type of remeasurement you want to do (see Remeasuring above)
